@@ -3,6 +3,8 @@ use ggez::event::{KeyMods, KeyCode};
 use ggez::{nalgebra as na, GameResult, Context, ContextBuilder, conf, graphics, event, timer};
 use std::env;
 use std::path;
+use ggez::nalgebra::{Matrix2};
+use arrayvec::ArrayVec;
 
 type ScreenPoint2 = na::Point2<f32>;
 type WorldPoint2 = na::Point2<i8>;
@@ -53,8 +55,8 @@ struct Tetrimino {
 }
 
 impl Tetrimino {
-    const COUNTER_CLOCKWISE_MATRIX: [[i8; 2]; 2] = [[0, -1], [1, 0]];
-    const CLOCKWISE_MATRIX: [[i8; 2]; 2] = [[0, 1], [-1, 0]];
+    const COUNTER_CLOCKWISE_MATRIX: [i8; 4] = [0, -1, 1, 0];
+    const CLOCKWISE_MATRIX: [i8; 4] = [0, 1, -1, 0];
 
     fn from(kind: TetriminoType) -> Tetrimino {
         match kind {
@@ -110,6 +112,28 @@ impl Tetrimino {
 
     fn move_up(&mut self) {
         self.pos.y += -1;
+    }
+
+    fn rotate_counter_clockwise(&mut self) {
+        let rotation_matrix = Matrix2::from_row_slice(&Tetrimino::COUNTER_CLOCKWISE_MATRIX);
+        let mut new_vectors = ArrayVec::<[WorldVector2; 3]>::new();
+
+        for vector in self.vectors.iter() {
+            let result = rotation_matrix * vector;
+            new_vectors.push(result);
+        }
+        self.vectors = new_vectors.into_inner().unwrap();
+    }
+
+    fn rotate_clockwise(&mut self) {
+        let rotation_matrix = Matrix2::from_row_slice(&Tetrimino::CLOCKWISE_MATRIX);
+        let mut new_vectors = ArrayVec::<[WorldVector2; 3]>::new();
+
+        for vector in self.vectors.iter() {
+            let result = rotation_matrix * vector;
+            new_vectors.push(result);
+        }
+        self.vectors = new_vectors.into_inner().unwrap();
     }
 }
 
@@ -218,6 +242,12 @@ impl ggez::event::EventHandler for MainState {
             }
             KeyCode::Up => {
                 self.tetrimino.move_up();
+            }
+            KeyCode::Q => {
+                self.tetrimino.rotate_counter_clockwise();
+            }
+            KeyCode::W => {
+                self.tetrimino.rotate_clockwise();
             }
             _ => ()
         }

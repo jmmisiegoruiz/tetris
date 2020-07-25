@@ -2027,6 +2027,7 @@ dependencies = [
 name = "tetris"
 version = "0.1.0"
 dependencies = [
+ "arrayvec 0.5.1",
  "ggez",
 ]
 
