@@ -21,6 +21,13 @@ enum TetriminoType {
     Z,
 }
 
+#[derive(Debug)]
+enum Direction {
+    DOWN(i8),
+    LEFT(i8),
+    RIGHT(i8),
+}
+
 struct Assets {
     block_image: graphics::Image,
 }
@@ -55,8 +62,8 @@ struct Tetrimino {
 }
 
 impl Tetrimino {
-    const COUNTER_CLOCKWISE_MATRIX: [i8; 4] = [0, -1, 1, 0];
-    const CLOCKWISE_MATRIX: [i8; 4] = [0, 1, -1, 0];
+    const CLOCKWISE_MATRIX: [i8; 4] = [0, -1, 1, 0];
+    const COUNTER_CLOCKWISE_MATRIX: [i8; 4] = [0, 1, -1, 0];
 
     fn from(kind: TetriminoType) -> Tetrimino {
         match kind {
@@ -73,7 +80,7 @@ impl Tetrimino {
             TetriminoType::L => Tetrimino {
                 kind: TetriminoType::L,
                 pos: WorldPoint2::origin(),
-                vectors: [WorldVector2::new(-2, 0), WorldVector2::new(-1, 0), WorldVector2::new(0, -1)],
+                vectors: [WorldVector2::new(0, -1), WorldVector2::new(1, 0), WorldVector2::new(2, 0)],
             },
             TetriminoType::O => Tetrimino {
                 kind: TetriminoType::O,
@@ -99,15 +106,46 @@ impl Tetrimino {
     }
 
     fn move_left(&mut self) {
-        self.pos.x += -1;
+        if self.can_move(Direction::LEFT(0)) {
+            self.pos.x += -1;
+        }
     }
 
     fn move_right(&mut self) {
-        self.pos.x += 1;
+        if self.can_move(Direction::RIGHT(9)) {
+            self.pos.x += 1;
+        }
     }
 
     fn move_down(&mut self) {
-        self.pos.y += 1;
+        if self.can_move(Direction::DOWN(19)) {
+            self.pos.y += 1;
+        }
+    }
+
+    fn can_move(&mut self, direction: Direction) -> bool {
+        let mut can_move = true;
+        for vector in self.vectors.iter() {
+
+            match direction {
+                Direction::DOWN(limit) => {
+                    if self.pos.y + vector.y + 1 > limit {
+                        can_move = false;
+                    }
+                },
+                Direction::LEFT(limit) => {
+                    if self.pos.x + vector.x - 1 < limit {
+                        can_move = false;
+                    }
+                },
+                Direction::RIGHT(limit) => {
+                    if self.pos.x + vector.x + 1 > limit {
+                        can_move = false;
+                    }
+                },
+            }
+        }
+        can_move
     }
 
     fn move_up(&mut self) {
@@ -152,7 +190,7 @@ impl MainState {
         println!("Game resource path: {:?}", ctx.filesystem);
 
         let assets = Assets::new(ctx)?;
-        let tetrimino = Tetrimino::from(TetriminoType::I);
+        let tetrimino = Tetrimino::from(TetriminoType::L);
         let (width, height) = graphics::drawable_size(ctx);
 
         let s = MainState {
@@ -167,7 +205,7 @@ impl MainState {
     }
 }
 
-fn world_to_screen_coords(screen_width: f32, screen_height: f32, point: WorldPoint2) -> ScreenPoint2 {
+fn world_to_screen_coords(screen_width: f32, screen_height: f32, point: &WorldPoint2) -> ScreenPoint2 {
     let x = (point.x as f32) * (screen_width / 10.0);
     let y = (point.y as f32) * (screen_height / 20.0);
     ScreenPoint2::new(x, y)
@@ -180,7 +218,7 @@ fn draw_tetrimino(
     world_coords: (f32, f32),
 ) -> GameResult {
     let (screen_w, screen_h) = world_coords;
-    let pos = world_to_screen_coords(screen_w, screen_h, tetrimino.pos);
+    let pos = world_to_screen_coords(screen_w, screen_h, &tetrimino.pos);
     let image = assets.block_image(tetrimino);
 
     for vector in tetrimino.vectors.iter() {
@@ -188,7 +226,7 @@ fn draw_tetrimino(
             world_to_screen_coords(
                 screen_w,
                 screen_h,
-                WorldPoint2::from([vector.x + tetrimino.pos.x, vector.y + tetrimino.pos.y]));
+                &WorldPoint2::from([vector.x + tetrimino.pos.x, vector.y + tetrimino.pos.y]));
         let draw_params = graphics::DrawParam::new()
             .dest(vector_pos);
         graphics::draw(ctx, image, draw_params);
