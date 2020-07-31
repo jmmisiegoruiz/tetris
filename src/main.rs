@@ -117,10 +117,12 @@ impl Tetrimino {
         }
     }
 
-    fn move_down(&mut self) {
-        if self.can_move(Direction::DOWN(19)) {
+    fn move_down(&mut self) -> bool {
+        let can_move = self.can_move(Direction::DOWN(19));
+        if can_move {
             self.pos.y += 1;
         }
+        can_move
     }
 
     fn can_move(&mut self, direction: Direction) -> bool {
