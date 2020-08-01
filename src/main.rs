@@ -66,41 +66,42 @@ impl Tetrimino {
     const COUNTER_CLOCKWISE_MATRIX: [i8; 4] = [0, 1, -1, 0];
 
     fn from(kind: TetriminoType) -> Tetrimino {
+        let pos = WorldPoint2::new(4, 1);
         match kind {
             TetriminoType::I => Tetrimino {
                 kind: TetriminoType::I,
-                pos: WorldPoint2::new(4, 0),
+                pos,
                 vectors: [WorldVector2::new(-1, 0), WorldVector2::new(1, 0), WorldVector2::new(2, 0)],
             },
             TetriminoType::J => Tetrimino {
                 kind: TetriminoType::J,
-                pos: WorldPoint2::origin(),
-                vectors: [WorldVector2::new(-2, 0), WorldVector2::new(-1, 0), WorldVector2::new(0, -1)],
+                pos,
+                vectors: [WorldVector2::new(-2, 0), WorldVector2::new(-1, 0), WorldVector2::new(0, 1)],
             },
             TetriminoType::L => Tetrimino {
                 kind: TetriminoType::L,
-                pos: WorldPoint2::origin(),
-                vectors: [WorldVector2::new(0, -1), WorldVector2::new(1, 0), WorldVector2::new(2, 0)],
+                pos,
+                vectors: [WorldVector2::new(0, 1), WorldVector2::new(1, 0), WorldVector2::new(2, 0)],
             },
             TetriminoType::O => Tetrimino {
                 kind: TetriminoType::O,
-                pos: WorldPoint2::origin(),
-                vectors: [WorldVector2::new(-2, 0), WorldVector2::new(-1, 0), WorldVector2::new(0, -1)],
+                pos,
+                vectors: [WorldVector2::new(1, 0), WorldVector2::new(0, 1), WorldVector2::new(1, 1)],
             },
             TetriminoType::S => Tetrimino {
                 kind: TetriminoType::S,
-                pos: WorldPoint2::origin(),
-                vectors: [WorldVector2::new(-2, 0), WorldVector2::new(-1, 0), WorldVector2::new(0, -1)],
+                pos,
+                vectors: [WorldVector2::new(-1, 1), WorldVector2::new(0, 1), WorldVector2::new(1, 0)],
             },
             TetriminoType::T => Tetrimino {
                 kind: TetriminoType::T,
-                pos: WorldPoint2::origin(),
-                vectors: [WorldVector2::new(-2, 0), WorldVector2::new(-1, 0), WorldVector2::new(0, -1)],
+                pos,
+                vectors: [WorldVector2::new(-1, 0), WorldVector2::new(0, 1), WorldVector2::new(1, 0)],
             },
             TetriminoType::Z => Tetrimino {
                 kind: TetriminoType::Z,
-                pos: WorldPoint2::origin(),
-                vectors: [WorldVector2::new(-2, 0), WorldVector2::new(-1, 0), WorldVector2::new(0, -1)],
+                pos,
+                vectors: [WorldVector2::new(-1, -1), WorldVector2::new(0, -1), WorldVector2::new(1, 0)],
             },
         }
     }
@@ -192,7 +193,7 @@ impl MainState {
         println!("Game resource path: {:?}", ctx.filesystem);
 
         let assets = Assets::new(ctx)?;
-        let tetrimino = Tetrimino::from(TetriminoType::L);
+        let tetrimino = Tetrimino::from(TetriminoType::Z);
         let (width, height) = graphics::drawable_size(ctx);
 
         let s = MainState {
@@ -231,7 +232,7 @@ fn draw_tetrimino(
                 &WorldPoint2::from([vector.x + tetrimino.pos.x, vector.y + tetrimino.pos.y]));
         let draw_params = graphics::DrawParam::new()
             .dest(vector_pos);
-        graphics::draw(ctx, image, draw_params);
+        graphics::draw(ctx, image, draw_params)?
     }
 
     let draw_params = graphics::DrawParam::new()
@@ -248,7 +249,9 @@ impl ggez::event::EventHandler for MainState {
 
             self.fall_timeout -= seconds;
             if self.fall_timeout < 0.0 {
-                self.tetrimino.move_down();
+                if !self.tetrimino.move_down() {
+                    self.tetrimino = Tetrimino::from(TetriminoType::S);
+                }
                 self.fall_timeout = FALL_TIME;
             }
 
