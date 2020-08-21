@@ -5,7 +5,9 @@ use std::env;
 use std::path;
 use ggez::nalgebra::{Matrix2, MatrixMN, U21, U12, U20, U10};
 use arrayvec::ArrayVec;
+use rand;
 use std::convert::TryFrom;
+use rand::Rng;
 
 type ScreenPoint2 = na::Point2<f32>;
 type WorldPoint2 = na::Point2<i8>;
@@ -35,7 +37,7 @@ impl TetriminoType {
         }
     }
 
-    fn from_code(code: &u8) -> Option<TetriminoType> {
+    fn from_code(code: u8) -> Option<TetriminoType> {
         match code {
             1 => Option::from(TetriminoType::I),
             2 => Option::from(TetriminoType::J),
@@ -57,7 +59,7 @@ enum BoardType {
 }
 
 impl BoardType {
-    fn from_code(code: &u8) -> Option<BoardType>{
+    fn from_code(code: u8) -> Option<BoardType>{
         match code {
             0 => Option::from(BoardType::EMPTY),
             99 => Option::from(BoardType::LIMIT),
@@ -98,7 +100,7 @@ impl Assets {
         })
     }
 
-    fn block_image(&mut self, code: &u8) -> Option<&mut Image> {
+    fn block_image(&mut self, code: u8) -> Option<&mut Image> {
         match TetriminoType::from_code(code) {
             Some(tetrimino_type) => {
                 match tetrimino_type {
@@ -143,6 +145,7 @@ impl Board {
     }
 
     fn update(&mut self, tetrimino: &Tetrimino) {
+        *self.data.index_mut(to_matrix_index(tetrimino.pos.x, tetrimino.pos.y)) = tetrimino.kind.to_code();
         for vector in tetrimino.vectors.iter() {
             *self.data.index_mut(to_matrix_index(tetrimino.pos.x + vector.x, tetrimino.pos.y + vector.y)) = tetrimino.kind.to_code();
         }
@@ -312,7 +315,8 @@ impl MainState {
 
         let assets = Assets::new(ctx)?;
         let board = Board::new();
-        let tetrimino = Tetrimino::from(TetriminoType::Z);
+        let mut rng = rand::thread_rng();
+        let tetrimino = Tetrimino::from(TetriminoType::from_code(rng.gen_range(1, 8)).unwrap());
         let (width, height) = graphics::drawable_size(ctx);
 
         let s = MainState {
@@ -347,7 +351,7 @@ fn draw_tetrimino(
 ) -> GameResult {
     let (screen_w, screen_h) = world_coords;
     let pos = world_to_screen_coords(screen_w, screen_h, &tetrimino.pos);
-    let image = assets.block_image(&TetriminoType::to_code(&tetrimino.kind)).unwrap();
+    let image = assets.block_image(TetriminoType::to_code(&tetrimino.kind)).unwrap();
 
     for vector in tetrimino.vectors.iter() {
         let vector_pos =
@@ -356,11 +360,13 @@ fn draw_tetrimino(
                 screen_h,
                 &WorldPoint2::from([vector.x + tetrimino.pos.x, vector.y + tetrimino.pos.y]));
         let draw_params = graphics::DrawParam::new()
+            .scale([0.5,0.5])
             .dest(vector_pos);
         graphics::draw(ctx, image, draw_params)?
     }
 
     let draw_params = graphics::DrawParam::new()
+        .scale([0.5,0.5])
         .dest(pos);
     graphics::draw(ctx, image, draw_params)
 }
@@ -382,9 +388,10 @@ fn draw_board(
                         i8::try_from(c).expect("Failed to convert X coordinate"),
                         i8::try_from(r).expect("Failed to convert Y coordinate"),
                     ]));
-            let image = assets.block_image(_element.get((0,0)).unwrap());
+            let image = assets.block_image(*_element.get((0,0)).unwrap());
             if let Some(image) = image {
                 let draw_params = graphics::DrawParam::new()
+                    .scale([0.5,0.5])
                     .dest(point);
                 graphics::draw(ctx, image, draw_params)?
             }
@@ -404,7 +411,8 @@ impl ggez::event::EventHandler for MainState {
             if self.fall_timeout < 0.0 {
                 if !self.tetrimino.move_down(&self.board) {
                     &self.board.update(&self.tetrimino);
-                    self.tetrimino = Tetrimino::from(TetriminoType::S);
+                    let mut rng = rand::thread_rng();
+                    self.tetrimino = Tetrimino::from(TetriminoType::from_code(rng.gen_range(1, 8)).unwrap());
                 }
                 self.fall_timeout = FALL_TIME;
             }
@@ -461,8 +469,8 @@ fn main() -> GameResult {
 
     let mut config = conf::Conf::new();
     config.window_setup.title = String::from("Just another Tetris");
-    config.window_mode.width = 528.0;
-    config.window_mode.height = 924.0;
+    config.window_mode.width = 264.0;
+    config.window_mode.height = 462.0;
 
     let (ref mut ctx, ref mut event_loop) = ContextBuilder::new("tetris", "Jose Matias Misiego Ruiz")
         .conf(config)
