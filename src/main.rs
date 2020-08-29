@@ -149,6 +149,27 @@ impl Board {
         for vector in tetrimino.vectors.iter() {
             *self.data.index_mut(to_matrix_index(tetrimino.pos.x + vector.x, tetrimino.pos.y + vector.y)) = tetrimino.kind.to_code();
         }
+
+        let mut updated_data: MatrixMN<u8, U21, U12> = MatrixMN::<u8, U20, U10>::zeros()
+            .insert_row(20, 99)
+            .insert_column(0, 99)
+            .insert_column(11, 99);
+        let mut updated_data_row_index = 19;
+
+        for data_row_index in (0..=19).rev() {
+            let mut row = self.data.row_mut(data_row_index);
+            let row_complete = row.column_iter().all(|element| *element.get((0,0)).unwrap() > 0);
+            if !row_complete {
+                for (c, element) in row.column_iter_mut().enumerate() {
+                    *updated_data.index_mut((updated_data_row_index, c)) = *element.get((0,0)).unwrap();
+                }
+                if updated_data_row_index > 0 {
+                    updated_data_row_index -= 1;
+                }
+            }
+        }
+
+        self.data = updated_data;
     }
 }
 
@@ -226,8 +247,7 @@ impl Tetrimino {
 
     fn can_move(&mut self, direction: Direction, board: &Board) -> bool {
         let mut can_move = true;
-        for (idx, vector) in self.vectors.iter().enumerate() {
-            println!("Vector: {}", vector);
+        for vector in self.vectors.iter() {
 
             match direction {
                 Direction::DOWN => {
@@ -235,7 +255,6 @@ impl Tetrimino {
                         self.pos.x + vector.x,
                         self.pos.y + vector.y + 1,
                     )) {
-                        println!("Board value {} at index: ({}, {}) for vector {}", value, self.pos.y + vector.y + 1, self.pos.x + vector.x, idx);
                         if value > &0 {
                             can_move = false;
                         }
@@ -246,7 +265,6 @@ impl Tetrimino {
                         self.pos.x + vector.x - 1,
                         self.pos.y + vector.y,
                     )) {
-                        println!("Board value {} at index: ({}, {}) for vector {}", value, self.pos.y + vector.y, self.pos.x + vector.x - 1, idx);
                         if value > &0 {
                             can_move = false;
                         }
@@ -257,7 +275,6 @@ impl Tetrimino {
                         self.pos.x + vector.x + 1,
                         self.pos.y + vector.y,
                     )) {
-                        println!("Board value {} at index: ({}, {}) for vector {}", value, self.pos.y + vector.y, self.pos.x + vector.x + 1, idx);
                         if value > &0 {
                             can_move = false;
                         }
@@ -269,10 +286,6 @@ impl Tetrimino {
             }
         }
         can_move
-    }
-
-    fn move_up(&mut self) {
-        self.pos.y += -1;
     }
 
     fn rotate_counter_clockwise(&mut self) {
@@ -298,7 +311,7 @@ impl Tetrimino {
     }
 }
 
-const FALL_TIME: f32 = 5.0;
+const FALL_TIME: f32 = 1.0;
 
 struct MainState {
     assets: Assets,
@@ -311,8 +324,6 @@ struct MainState {
 
 impl MainState {
     fn new(ctx: &mut Context) -> GameResult<MainState> {
-        println!("Game resource path: {:?}", ctx.filesystem);
-
         let assets = Assets::new(ctx)?;
         let board = Board::new();
         let mut rng = rand::thread_rng();
@@ -443,9 +454,6 @@ impl ggez::event::EventHandler for MainState {
             }
             KeyCode::Down => {
                 self.tetrimino.move_down(&self.board);
-            }
-            KeyCode::Up => {
-                self.tetrimino.move_up();
             }
             KeyCode::Q => {
                 self.tetrimino.rotate_counter_clockwise();
