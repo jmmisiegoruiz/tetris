@@ -13,6 +13,12 @@ type ScreenPoint2 = na::Point2<f32>;
 type WorldPoint2 = na::Point2<i8>;
 type WorldVector2 = na::Vector2<i8>;
 
+const BOARD_WIDTH: f32 = 264.0;
+const BOARD_HEIGHT: f32 = 462.0;
+const SCREEN_WIDTH: f32 = 792.0;
+const SCREEN_HEIGHT: f32 = BOARD_HEIGHT + BOARD_HEIGHT/4.0;
+const FALL_TIME: f32 = 1.0;
+
 #[derive(Debug)]
 enum TetriminoType {
     I,
@@ -130,7 +136,9 @@ impl Assets {
 
 #[derive(Debug)]
 struct Board {
-    data: MatrixMN<u8, U21, U12>
+    data: MatrixMN<u8, U21, U12>,
+    height: f32,
+    width: f32
 }
 
 impl Board {
@@ -140,7 +148,9 @@ impl Board {
             .insert_column(0, 99)
             .insert_column(11, 99);
         Board {
-            data
+            data,
+            height: BOARD_HEIGHT,
+            width: BOARD_WIDTH
         }
     }
 
@@ -311,13 +321,9 @@ impl Tetrimino {
     }
 }
 
-const FALL_TIME: f32 = 1.0;
-
 struct MainState {
     assets: Assets,
     board: Board,
-    screen_width: f32,
-    screen_height: f32,
     tetrimino: Tetrimino,
     fall_timeout: f32,
 }
@@ -328,13 +334,10 @@ impl MainState {
         let board = Board::new();
         let mut rng = rand::thread_rng();
         let tetrimino = Tetrimino::from(TetriminoType::from_code(rng.gen_range(1, 8)).unwrap());
-        let (width, height) = graphics::drawable_size(ctx);
 
         let s = MainState {
             assets,
             board,
-            screen_width: width,
-            screen_height: height,
             tetrimino,
             fall_timeout: FALL_TIME,
         };
@@ -348,9 +351,9 @@ fn to_matrix_index(x: i8, y: i8) -> (usize, usize) {
      usize::try_from(x).expect("Failed to convert X coordinate"))
 }
 
-fn world_to_screen_coords(screen_width: f32, screen_height: f32, point: &WorldPoint2) -> ScreenPoint2 {
-    let x = (point.x as f32) * (screen_width / 12.0);
-    let y = (point.y as f32) * (screen_height / 21.0);
+fn world_to_screen_coords(board_width: f32, board_height: f32, point: &WorldPoint2) -> ScreenPoint2 {
+    let x = (point.x as f32) * (board_width / 12.0) + BOARD_WIDTH;
+    let y = (point.y as f32) * (board_height / 21.0) + BOARD_HEIGHT/4.0;
     ScreenPoint2::new(x, y)
 }
 
@@ -386,15 +389,15 @@ fn draw_board(
     assets: &mut Assets,
     ctx: &mut Context,
     board: &Board,
-    world_coords: (f32, f32),
+    board_dimensions: (f32, f32),
 ) -> GameResult {
-    let (screen_w, screen_h) = world_coords;
+    let (board_width, board_height) = board_dimensions;
     for (r, row) in board.data.row_iter().enumerate() {
         for (c, _element) in row.column_iter().enumerate() {
             let point =
                 world_to_screen_coords(
-                    screen_w,
-                    screen_h,
+                    board_width,
+                    board_height,
                     &WorldPoint2::from([
                         i8::try_from(c).expect("Failed to convert X coordinate"),
                         i8::try_from(r).expect("Failed to convert Y coordinate"),
@@ -435,7 +438,7 @@ impl ggez::event::EventHandler for MainState {
 
         {
             let assets = &mut self.assets;
-            let coords = (self.screen_width, self.screen_height);
+            let coords = (self.board.width, self.board.height);
 
             draw_tetrimino(assets, ctx, &self.tetrimino, coords)?;
             draw_board(assets, ctx, &self.board, coords)?;
@@ -477,8 +480,8 @@ fn main() -> GameResult {
 
     let mut config = conf::Conf::new();
     config.window_setup.title = String::from("Just another Tetris");
-    config.window_mode.width = 264.0;
-    config.window_mode.height = 462.0;
+    config.window_mode.width = SCREEN_WIDTH;
+    config.window_mode.height = SCREEN_HEIGHT;
 
     let (ref mut ctx, ref mut event_loop) = ContextBuilder::new("tetris", "Jose Matias Misiego Ruiz")
         .conf(config)
