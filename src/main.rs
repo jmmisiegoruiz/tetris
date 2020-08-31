@@ -1,4 +1,4 @@
-use ggez::graphics::{BLACK, Image};
+use ggez::graphics::{BLACK, Image, Text};
 use ggez::event::{KeyMods, KeyCode};
 use ggez::{nalgebra as na, GameResult, Context, ContextBuilder, conf, graphics, event, timer};
 use std::env;
@@ -154,7 +154,7 @@ impl Board {
         }
     }
 
-    fn update(&mut self, tetrimino: &Tetrimino) {
+    fn update(&mut self, tetrimino: &Tetrimino, score: &mut Score) {
         *self.data.index_mut(to_matrix_index(tetrimino.pos.x, tetrimino.pos.y)) = tetrimino.kind.to_code();
         for vector in tetrimino.vectors.iter() {
             *self.data.index_mut(to_matrix_index(tetrimino.pos.x + vector.x, tetrimino.pos.y + vector.y)) = tetrimino.kind.to_code();
@@ -176,6 +176,8 @@ impl Board {
                 if updated_data_row_index > 0 {
                     updated_data_row_index -= 1;
                 }
+            } else {
+                score.lines += 1;
             }
         }
 
@@ -321,11 +323,24 @@ impl Tetrimino {
     }
 }
 
+struct Score {
+    lines: u8
+}
+
+impl Score {
+    fn new() -> Score {
+        Score {
+            lines: 0
+        }
+    }
+}
+
 struct MainState {
     assets: Assets,
     board: Board,
-    tetrimino: Tetrimino,
     fall_timeout: f32,
+    score: Score,
+    tetrimino: Tetrimino,
 }
 
 impl MainState {
@@ -334,12 +349,14 @@ impl MainState {
         let board = Board::new();
         let mut rng = rand::thread_rng();
         let tetrimino = Tetrimino::from(TetriminoType::from_code(rng.gen_range(1, 8)).unwrap());
+        let score = Score::new();
 
         let s = MainState {
             assets,
             board,
-            tetrimino,
             fall_timeout: FALL_TIME,
+            score,
+            tetrimino,
         };
 
         Ok(s)
@@ -361,9 +378,9 @@ fn draw_tetrimino(
     assets: &mut Assets,
     ctx: &mut Context,
     tetrimino: &Tetrimino,
-    world_coords: (f32, f32),
+    board_dimensions: (f32, f32),
 ) -> GameResult {
-    let (screen_w, screen_h) = world_coords;
+    let (screen_w, screen_h) = board_dimensions;
     let pos = world_to_screen_coords(screen_w, screen_h, &tetrimino.pos);
     let image = assets.block_image(TetriminoType::to_code(&tetrimino.kind)).unwrap();
 
@@ -414,6 +431,18 @@ fn draw_board(
     GameResult::Ok(())
 }
 
+fn draw_score(
+    ctx: &mut Context,
+    score: &Score,
+) -> GameResult {
+    let lines = Text::new(format!("LINES: {}", score.lines));
+    graphics::draw(
+        ctx,
+        &lines,
+        (ScreenPoint2::new(BOARD_WIDTH * 2.0 + BOARD_WIDTH/8.0, BOARD_HEIGHT/4.0), graphics::WHITE),
+    )
+}
+
 impl ggez::event::EventHandler for MainState {
     fn update(&mut self, ctx: &mut Context) -> GameResult<()> {
         const DESIRED_FPS: u32 = 60;
@@ -424,7 +453,7 @@ impl ggez::event::EventHandler for MainState {
             self.fall_timeout -= seconds;
             if self.fall_timeout < 0.0 {
                 if !self.tetrimino.move_down(&self.board) {
-                    &self.board.update(&self.tetrimino);
+                    &self.board.update(&self.tetrimino, &mut self.score);
                     let mut rng = rand::thread_rng();
                     self.tetrimino = Tetrimino::from(TetriminoType::from_code(rng.gen_range(1, 8)).unwrap());
                 }
@@ -438,10 +467,11 @@ impl ggez::event::EventHandler for MainState {
 
         {
             let assets = &mut self.assets;
-            let coords = (self.board.width, self.board.height);
+            let board_dimensions = (self.board.width, self.board.height);
 
-            draw_tetrimino(assets, ctx, &self.tetrimino, coords)?;
-            draw_board(assets, ctx, &self.board, coords)?;
+            draw_tetrimino(assets, ctx, &self.tetrimino, board_dimensions)?;
+            draw_board(assets, ctx, &self.board, board_dimensions)?;
+            draw_score(ctx, &self.score)?;
         }
 
         graphics::present(ctx)
