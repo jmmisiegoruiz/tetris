@@ -141,6 +141,11 @@ struct Board {
     width: f32
 }
 
+const POINTS_FOR_ONE_LINE: u32 = 40;
+const POINTS_FOR_TWO_LINES: u32 = 100;
+const POINTS_FOR_THREE_LINES: u32 = 300;
+const POINTS_FOR_MORE_THAN_THREE_LINES: u32 = 1200;
+
 impl Board {
     fn new() -> Board {
         let data: MatrixMN<u8, U21, U12> = MatrixMN::<u8, U20, U10>::zeros()
@@ -154,7 +159,7 @@ impl Board {
         }
     }
 
-    fn update(&mut self, tetrimino: &Tetrimino, score: &mut Score) {
+    fn update(&mut self, tetrimino: &Tetrimino, score: &mut ScoreBoard) {
         *self.data.index_mut(to_matrix_index(tetrimino.pos.x, tetrimino.pos.y)) = tetrimino.kind.to_code();
         for vector in tetrimino.vectors.iter() {
             *self.data.index_mut(to_matrix_index(tetrimino.pos.x + vector.x, tetrimino.pos.y + vector.y)) = tetrimino.kind.to_code();
@@ -165,6 +170,7 @@ impl Board {
             .insert_column(0, 99)
             .insert_column(11, 99);
         let mut updated_data_row_index = 19;
+        let mut cleaned_lines: u8 = 0;
 
         for data_row_index in (0..=19).rev() {
             let mut row = self.data.row_mut(data_row_index);
@@ -178,8 +184,17 @@ impl Board {
                 }
             } else {
                 score.lines += 1;
+                cleaned_lines += 1;
             }
         }
+
+        score.score = match cleaned_lines {
+            0 => score.score,
+            1 => score.score + POINTS_FOR_ONE_LINE,
+            2 => score.score + POINTS_FOR_TWO_LINES,
+            3 => score.score + POINTS_FOR_THREE_LINES,
+            _ => score.score + POINTS_FOR_MORE_THAN_THREE_LINES,
+        };
 
         self.data = updated_data;
     }
@@ -323,14 +338,16 @@ impl Tetrimino {
     }
 }
 
-struct Score {
-    lines: u8
+struct ScoreBoard {
+    lines: u8,
+    score: u32
 }
 
-impl Score {
-    fn new() -> Score {
-        Score {
-            lines: 0
+impl ScoreBoard {
+    fn new() -> ScoreBoard {
+        ScoreBoard {
+            lines: 0,
+            score: 0
         }
     }
 }
@@ -339,7 +356,7 @@ struct MainState {
     assets: Assets,
     board: Board,
     fall_timeout: f32,
-    score: Score,
+    score: ScoreBoard,
     tetrimino: Tetrimino,
 }
 
@@ -349,7 +366,7 @@ impl MainState {
         let board = Board::new();
         let mut rng = rand::thread_rng();
         let tetrimino = Tetrimino::from(TetriminoType::from_code(rng.gen_range(1, 8)).unwrap());
-        let score = Score::new();
+        let score = ScoreBoard::new();
 
         let s = MainState {
             assets,
@@ -431,15 +448,23 @@ fn draw_board(
     GameResult::Ok(())
 }
 
-fn draw_score(
+fn draw_score_board(
     ctx: &mut Context,
-    score: &Score,
+    score_board: &ScoreBoard,
 ) -> GameResult {
-    let lines = Text::new(format!("LINES: {}", score.lines));
+    let lines = Text::new(format!("LINES: {}", score_board.lines));
+    let score = Text::new(format!("SCORE: {}", score_board.score));
+
     graphics::draw(
         ctx,
         &lines,
         (ScreenPoint2::new(BOARD_WIDTH * 2.0 + BOARD_WIDTH/8.0, BOARD_HEIGHT/4.0), graphics::WHITE),
+    )?;
+
+    graphics::draw(
+        ctx,
+        &score,
+        (ScreenPoint2::new(BOARD_WIDTH * 2.0 + BOARD_WIDTH/8.0, 2.0 * BOARD_HEIGHT/4.0), graphics::WHITE),
     )
 }
 
@@ -471,7 +496,7 @@ impl ggez::event::EventHandler for MainState {
 
             draw_tetrimino(assets, ctx, &self.tetrimino, board_dimensions)?;
             draw_board(assets, ctx, &self.board, board_dimensions)?;
-            draw_score(ctx, &self.score)?;
+            draw_score_board(ctx, &self.score)?;
         }
 
         graphics::present(ctx)
