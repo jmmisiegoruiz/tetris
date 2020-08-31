@@ -8,6 +8,8 @@ use arrayvec::ArrayVec;
 use rand;
 use std::convert::TryFrom;
 use rand::Rng;
+use num_traits;
+use num_traits::ToPrimitive;
 
 type ScreenPoint2 = na::Point2<f32>;
 type WorldPoint2 = na::Point2<i8>;
@@ -196,6 +198,20 @@ impl Board {
             _ => score.score + POINTS_FOR_MORE_THAN_THREE_LINES,
         };
 
+        score.level = match score.lines {
+            0 ..= 5 => 0,
+            6 ..= 10 => 1,
+            11 ..= 15 => 2,
+            16 ..= 20 => 3,
+            21 ..= 25 => 4,
+            26 ..= 30 => 5,
+            31 ..= 35 => 6,
+            36 ..= 40 => 7,
+            41 ..= 45 => 8,
+            46 ..= 50 => 9,
+            _ => 9,
+        };
+
         self.data = updated_data;
     }
 }
@@ -339,6 +355,7 @@ impl Tetrimino {
 }
 
 struct ScoreBoard {
+    level: u8,
     lines: u8,
     score: u32
 }
@@ -346,6 +363,7 @@ struct ScoreBoard {
 impl ScoreBoard {
     fn new() -> ScoreBoard {
         ScoreBoard {
+            level: 0,
             lines: 0,
             score: 0
         }
@@ -454,17 +472,24 @@ fn draw_score_board(
 ) -> GameResult {
     let lines = Text::new(format!("LINES: {}", score_board.lines));
     let score = Text::new(format!("SCORE: {}", score_board.score));
+    let level = Text::new(format!("LEVEL: {}", score_board.level));
 
     graphics::draw(
         ctx,
         &lines,
-        (ScreenPoint2::new(BOARD_WIDTH * 2.0 + BOARD_WIDTH/8.0, BOARD_HEIGHT/4.0), graphics::WHITE),
+        (ScreenPoint2::new(BOARD_WIDTH * 2.0 + BOARD_WIDTH/8.0, 2.0 * BOARD_HEIGHT/8.0), graphics::WHITE),
     )?;
 
     graphics::draw(
         ctx,
         &score,
-        (ScreenPoint2::new(BOARD_WIDTH * 2.0 + BOARD_WIDTH/8.0, 2.0 * BOARD_HEIGHT/4.0), graphics::WHITE),
+        (ScreenPoint2::new(BOARD_WIDTH * 2.0 + BOARD_WIDTH/8.0, 3.0 * BOARD_HEIGHT/8.0), graphics::WHITE),
+    )?;
+
+    graphics::draw(
+        ctx,
+        &level,
+        (ScreenPoint2::new(BOARD_WIDTH * 2.0 + BOARD_WIDTH/8.0, 4.0 * BOARD_HEIGHT/8.0), graphics::WHITE),
     )
 }
 
@@ -482,7 +507,7 @@ impl ggez::event::EventHandler for MainState {
                     let mut rng = rand::thread_rng();
                     self.tetrimino = Tetrimino::from(TetriminoType::from_code(rng.gen_range(1, 8)).unwrap());
                 }
-                self.fall_timeout = FALL_TIME;
+                self.fall_timeout = FALL_TIME / (self.score.level + 1).to_f32().unwrap();
             }
         }
         Ok(())

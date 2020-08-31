@@ -2039,6 +2039,7 @@ version = "0.1.0"
 dependencies = [
  "arrayvec 0.5.1",
  "ggez",
+ "num-traits 0.2.12",
  "rand 0.3.23",
 ]
 

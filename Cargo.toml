@@ -9,4 +9,5 @@ edition = "2018"
 [dependencies]
 arrayvec = "0.5.1"
 ggez = "0.5"
+num-traits = "0.2.12"
 rand = "0.3.14"
