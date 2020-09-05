@@ -18,7 +18,7 @@ type WorldVector2 = na::Vector2<i8>;
 const BOARD_WIDTH: f32 = 264.0;
 const BOARD_HEIGHT: f32 = 462.0;
 const SCREEN_WIDTH: f32 = 792.0;
-const SCREEN_HEIGHT: f32 = BOARD_HEIGHT + BOARD_HEIGHT/4.0;
+const SCREEN_HEIGHT: f32 = BOARD_HEIGHT + BOARD_HEIGHT / 4.0;
 const FALL_TIME: f32 = 1.0;
 
 #[derive(Debug)]
@@ -67,7 +67,7 @@ enum BoardType {
 }
 
 impl BoardType {
-    fn from_code(code: u8) -> Option<BoardType>{
+    fn from_code(code: u8) -> Option<BoardType> {
         match code {
             0 => Option::from(BoardType::EMPTY),
             99 => Option::from(BoardType::LIMIT),
@@ -120,7 +120,7 @@ impl Assets {
                     TetriminoType::T => Option::from(&mut self.t_block_image),
                     TetriminoType::Z => Option::from(&mut self.z_block_image),
                 }
-            },
+            }
             None => {
                 match BoardType::from_code(code) {
                     None => Option::None,
@@ -129,9 +129,9 @@ impl Assets {
                             BoardType::LIMIT => Option::from(&mut self.b_block_image),
                             _ => Option::None,
                         }
-                    },
+                    }
                 }
-            },
+            }
         }
     }
 }
@@ -140,7 +140,7 @@ impl Assets {
 struct Board {
     data: MatrixMN<u8, U21, U12>,
     height: f32,
-    width: f32
+    width: f32,
 }
 
 const POINTS_FOR_ONE_LINE: u32 = 40;
@@ -157,7 +157,7 @@ impl Board {
         Board {
             data,
             height: BOARD_HEIGHT,
-            width: BOARD_WIDTH
+            width: BOARD_WIDTH,
         }
     }
 
@@ -176,10 +176,10 @@ impl Board {
 
         for data_row_index in (0..=19).rev() {
             let mut row = self.data.row_mut(data_row_index);
-            let row_complete = row.column_iter().all(|element| *element.get((0,0)).unwrap() > 0);
+            let row_complete = row.column_iter().all(|element| *element.get((0, 0)).unwrap() > 0);
             if !row_complete {
                 for (c, element) in row.column_iter_mut().enumerate() {
-                    *updated_data.index_mut((updated_data_row_index, c)) = *element.get((0,0)).unwrap();
+                    *updated_data.index_mut((updated_data_row_index, c)) = *element.get((0, 0)).unwrap();
                 }
                 if updated_data_row_index > 0 {
                     updated_data_row_index -= 1;
@@ -199,16 +199,16 @@ impl Board {
         };
 
         score.level = match score.lines {
-            0 ..= 5 => 0,
-            6 ..= 10 => 1,
-            11 ..= 15 => 2,
-            16 ..= 20 => 3,
-            21 ..= 25 => 4,
-            26 ..= 30 => 5,
-            31 ..= 35 => 6,
-            36 ..= 40 => 7,
-            41 ..= 45 => 8,
-            46 ..= 50 => 9,
+            0..=5 => 0,
+            6..=10 => 1,
+            11..=15 => 2,
+            16..=20 => 3,
+            21..=25 => 4,
+            26..=30 => 5,
+            31..=35 => 6,
+            36..=40 => 7,
+            41..=45 => 8,
+            46..=50 => 9,
             _ => 9,
         };
 
@@ -227,7 +227,7 @@ impl Tetrimino {
     const CLOCKWISE_MATRIX: [i8; 4] = [0, -1, 1, 0];
     const COUNTER_CLOCKWISE_MATRIX: [i8; 4] = [0, 1, -1, 0];
 
-    fn from(kind: TetriminoType) -> Tetrimino {
+    fn from(kind: &TetriminoType) -> Tetrimino {
         let pos = WorldPoint2::new(4, 1);
         match kind {
             TetriminoType::I => Tetrimino {
@@ -291,7 +291,6 @@ impl Tetrimino {
     fn can_move(&mut self, direction: Direction, board: &Board) -> bool {
         let mut can_move = true;
         for vector in self.vectors.iter() {
-
             match direction {
                 Direction::DOWN => {
                     if let Some(value) = board.data.get(to_matrix_index(
@@ -357,7 +356,7 @@ impl Tetrimino {
 struct ScoreBoard {
     level: u8,
     lines: u8,
-    score: u32
+    score: u32,
 }
 
 impl ScoreBoard {
@@ -365,7 +364,7 @@ impl ScoreBoard {
         ScoreBoard {
             level: 0,
             lines: 0,
-            score: 0
+            score: 0,
         }
     }
 }
@@ -374,6 +373,7 @@ struct MainState {
     assets: Assets,
     board: Board,
     fall_timeout: f32,
+    next_tetrimino: TetriminoType,
     score: ScoreBoard,
     tetrimino: Tetrimino,
 }
@@ -383,13 +383,15 @@ impl MainState {
         let assets = Assets::new(ctx)?;
         let board = Board::new();
         let mut rng = rand::thread_rng();
-        let tetrimino = Tetrimino::from(TetriminoType::from_code(rng.gen_range(1, 8)).unwrap());
+        let tetrimino = Tetrimino::from(&TetriminoType::from_code(rng.gen_range(1, 8)).unwrap());
+        let next_tetrimino = TetriminoType::from_code(rng.gen_range(1, 8)).unwrap();
         let score = ScoreBoard::new();
 
         let s = MainState {
             assets,
             board,
             fall_timeout: FALL_TIME,
+            next_tetrimino,
             score,
             tetrimino,
         };
@@ -405,7 +407,7 @@ fn to_matrix_index(x: i8, y: i8) -> (usize, usize) {
 
 fn world_to_screen_coords(board_width: f32, board_height: f32, point: &WorldPoint2) -> ScreenPoint2 {
     let x = (point.x as f32) * (board_width / 12.0) + BOARD_WIDTH;
-    let y = (point.y as f32) * (board_height / 21.0) + BOARD_HEIGHT/4.0;
+    let y = (point.y as f32) * (board_height / 21.0) + BOARD_HEIGHT / 4.0;
     ScreenPoint2::new(x, y)
 }
 
@@ -414,25 +416,32 @@ fn draw_tetrimino(
     ctx: &mut Context,
     tetrimino: &Tetrimino,
     board_dimensions: (f32, f32),
+    offset: Option<(f32, f32)>,
 ) -> GameResult {
-    let (screen_w, screen_h) = board_dimensions;
-    let pos = world_to_screen_coords(screen_w, screen_h, &tetrimino.pos);
+    let (board_w, board_h) = board_dimensions;
+    let mut pos = world_to_screen_coords(board_w, board_h, &tetrimino.pos);
+    if let Some((x_offset, y_offset)) = offset {
+        pos = ScreenPoint2::from([pos.x + x_offset, pos.y + y_offset]);
+    };
     let image = assets.block_image(TetriminoType::to_code(&tetrimino.kind)).unwrap();
 
     for vector in tetrimino.vectors.iter() {
-        let vector_pos =
+        let mut vector_pos =
             world_to_screen_coords(
-                screen_w,
-                screen_h,
+                board_w,
+                board_h,
                 &WorldPoint2::from([vector.x + tetrimino.pos.x, vector.y + tetrimino.pos.y]));
+        if let Some((x_offset, y_offset)) = offset {
+            vector_pos = ScreenPoint2::from([vector_pos.x + x_offset, vector_pos.y + y_offset]);
+        };
         let draw_params = graphics::DrawParam::new()
-            .scale([0.5,0.5])
+            .scale([0.5, 0.5])
             .dest(vector_pos);
         graphics::draw(ctx, image, draw_params)?
     }
 
     let draw_params = graphics::DrawParam::new()
-        .scale([0.5,0.5])
+        .scale([0.5, 0.5])
         .dest(pos);
     graphics::draw(ctx, image, draw_params)
 }
@@ -454,10 +463,10 @@ fn draw_board(
                         i8::try_from(c).expect("Failed to convert X coordinate"),
                         i8::try_from(r).expect("Failed to convert Y coordinate"),
                     ]));
-            let image = assets.block_image(*_element.get((0,0)).unwrap());
+            let image = assets.block_image(*_element.get((0, 0)).unwrap());
             if let Some(image) = image {
                 let draw_params = graphics::DrawParam::new()
-                    .scale([0.5,0.5])
+                    .scale([0.5, 0.5])
                     .dest(point);
                 graphics::draw(ctx, image, draw_params)?
             }
@@ -473,23 +482,30 @@ fn draw_score_board(
     let lines = Text::new(format!("LINES: {}", score_board.lines));
     let score = Text::new(format!("SCORE: {}", score_board.score));
     let level = Text::new(format!("LEVEL: {}", score_board.level));
+    let next_piece = Text::new("NEXT_PIECE");
 
     graphics::draw(
         ctx,
         &lines,
-        (ScreenPoint2::new(BOARD_WIDTH * 2.0 + BOARD_WIDTH/8.0, 2.0 * BOARD_HEIGHT/8.0), graphics::WHITE),
+        (ScreenPoint2::new(BOARD_WIDTH * 2.0 + BOARD_WIDTH / 8.0, 2.0 * BOARD_HEIGHT / 8.0), graphics::WHITE),
     )?;
 
     graphics::draw(
         ctx,
         &score,
-        (ScreenPoint2::new(BOARD_WIDTH * 2.0 + BOARD_WIDTH/8.0, 3.0 * BOARD_HEIGHT/8.0), graphics::WHITE),
+        (ScreenPoint2::new(BOARD_WIDTH * 2.0 + BOARD_WIDTH / 8.0, 3.0 * BOARD_HEIGHT / 8.0), graphics::WHITE),
     )?;
 
     graphics::draw(
         ctx,
         &level,
-        (ScreenPoint2::new(BOARD_WIDTH * 2.0 + BOARD_WIDTH/8.0, 4.0 * BOARD_HEIGHT/8.0), graphics::WHITE),
+        (ScreenPoint2::new(BOARD_WIDTH * 2.0 + BOARD_WIDTH / 8.0, 4.0 * BOARD_HEIGHT / 8.0), graphics::WHITE),
+    )?;
+
+    graphics::draw(
+        ctx,
+        &next_piece,
+        (ScreenPoint2::new(BOARD_WIDTH * 2.0 + BOARD_WIDTH / 8.0, 5.5 * BOARD_HEIGHT / 8.0), graphics::WHITE),
     )
 }
 
@@ -505,7 +521,8 @@ impl ggez::event::EventHandler for MainState {
                 if !self.tetrimino.move_down(&self.board) {
                     &self.board.update(&self.tetrimino, &mut self.score);
                     let mut rng = rand::thread_rng();
-                    self.tetrimino = Tetrimino::from(TetriminoType::from_code(rng.gen_range(1, 8)).unwrap());
+                    self.tetrimino = Tetrimino::from(&self.next_tetrimino);
+                    self.next_tetrimino = TetriminoType::from_code(rng.gen_range(1, 8)).unwrap();
                 }
                 self.fall_timeout = FALL_TIME / (self.score.level + 1).to_f32().unwrap();
             }
@@ -519,7 +536,8 @@ impl ggez::event::EventHandler for MainState {
             let assets = &mut self.assets;
             let board_dimensions = (self.board.width, self.board.height);
 
-            draw_tetrimino(assets, ctx, &self.tetrimino, board_dimensions)?;
+            draw_tetrimino(assets, ctx, &self.tetrimino, board_dimensions, None)?;
+            draw_tetrimino(assets, ctx, &Tetrimino::from(&self.next_tetrimino), board_dimensions, Option::from((BOARD_WIDTH, BOARD_HEIGHT/2.0)))?;
             draw_board(assets, ctx, &self.board, board_dimensions)?;
             draw_score_board(ctx, &self.score)?;
         }
