@@ -374,6 +374,7 @@ struct MainState {
     assets: Assets,
     board: Board,
     fall_timeout: f32,
+    next_tetrimino: Tetrimino,
     score: ScoreBoard,
     tetrimino: Tetrimino,
 }
@@ -384,12 +385,14 @@ impl MainState {
         let board = Board::new();
         let mut rng = rand::thread_rng();
         let tetrimino = Tetrimino::from(TetriminoType::from_code(rng.gen_range(1, 8)).unwrap());
+        let next_tetrimino = Tetrimino::from(TetriminoType::from_code(rng.gen_range(1, 8)).unwrap());
         let score = ScoreBoard::new();
 
         let s = MainState {
             assets,
             board,
             fall_timeout: FALL_TIME,
+            next_tetrimino,
             score,
             tetrimino,
         };
@@ -415,15 +418,15 @@ fn draw_tetrimino(
     tetrimino: &Tetrimino,
     board_dimensions: (f32, f32),
 ) -> GameResult {
-    let (screen_w, screen_h) = board_dimensions;
-    let pos = world_to_screen_coords(screen_w, screen_h, &tetrimino.pos);
+    let (board_w, board_h) = board_dimensions;
+    let pos = world_to_screen_coords(board_w, board_h, &tetrimino.pos);
     let image = assets.block_image(TetriminoType::to_code(&tetrimino.kind)).unwrap();
 
     for vector in tetrimino.vectors.iter() {
         let vector_pos =
             world_to_screen_coords(
-                screen_w,
-                screen_h,
+                board_w,
+                board_h,
                 &WorldPoint2::from([vector.x + tetrimino.pos.x, vector.y + tetrimino.pos.y]));
         let draw_params = graphics::DrawParam::new()
             .scale([0.5,0.5])
@@ -505,6 +508,7 @@ impl ggez::event::EventHandler for MainState {
                 if !self.tetrimino.move_down(&self.board) {
                     &self.board.update(&self.tetrimino, &mut self.score);
                     let mut rng = rand::thread_rng();
+                    self.tetrimino = self.next_tetrimino         ;
                     self.tetrimino = Tetrimino::from(TetriminoType::from_code(rng.gen_range(1, 8)).unwrap());
                 }
                 self.fall_timeout = FALL_TIME / (self.score.level + 1).to_f32().unwrap();
