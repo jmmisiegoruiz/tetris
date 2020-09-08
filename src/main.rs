@@ -10,10 +10,13 @@ use std::convert::TryFrom;
 use rand::Rng;
 use num_traits;
 use num_traits::ToPrimitive;
+use ggez_goodies::scene::{Scene, SceneSwitch};
 
 type ScreenPoint2 = na::Point2<f32>;
 type WorldPoint2 = na::Point2<i8>;
 type WorldVector2 = na::Vector2<i8>;
+
+type SceneStack = ggez_goodies::scene::SceneStack<SharedState, KeyCode>;
 
 const BOARD_WIDTH: f32 = 264.0;
 const BOARD_HEIGHT: f32 = 462.0;
@@ -369,8 +372,23 @@ impl ScoreBoard {
     }
 }
 
-struct MainState {
-    assets: Assets,
+struct SharedState {
+    assets: Assets
+}
+
+impl SharedState {
+    fn new(ctx: &mut Context) -> GameResult<SharedState> {
+        let assets = Assets::new(ctx)?;
+
+        let s = SharedState {
+            assets
+        };
+
+        Ok(s)
+    }
+}
+
+struct GamePlayState {
     board: Board,
     fall_timeout: f32,
     next_tetrimino: TetriminoType,
@@ -378,17 +396,15 @@ struct MainState {
     tetrimino: Tetrimino,
 }
 
-impl MainState {
-    fn new(ctx: &mut Context) -> GameResult<MainState> {
-        let assets = Assets::new(ctx)?;
+impl GamePlayState {
+    fn new() -> GameResult<GamePlayState> {
         let board = Board::new();
         let mut rng = rand::thread_rng();
         let tetrimino = Tetrimino::from(&TetriminoType::from_code(rng.gen_range(1, 8)).unwrap());
         let next_tetrimino = TetriminoType::from_code(rng.gen_range(1, 8)).unwrap();
         let score = ScoreBoard::new();
 
-        let s = MainState {
-            assets,
+        let s = GamePlayState {
             board,
             fall_timeout: FALL_TIME,
             next_tetrimino,
@@ -397,6 +413,93 @@ impl MainState {
         };
 
         Ok(s)
+    }
+}
+
+struct MainState {
+    scenes: SceneStack
+}
+
+impl MainState {
+    fn new(ctx: &mut Context, global_state: SharedState) -> GameResult<MainState> {
+        let s = MainState {
+            scenes: SceneStack::new(ctx, global_state)
+        };
+        Ok(s)
+    }
+}
+
+struct GamePlayScene {
+    state: GamePlayState
+}
+
+impl Scene<SharedState, KeyCode> for GamePlayScene {
+    fn update(&mut self, _game_world: &mut SharedState, ctx: &mut Context) -> SceneSwitch<SharedState, KeyCode> {
+        let scene_state = &mut self.state;
+        const DESIRED_FPS: u32 = 60;
+        while timer::check_update_time(ctx, DESIRED_FPS) {
+            let seconds = 1.0 / (DESIRED_FPS as f32);
+
+            scene_state.fall_timeout -= seconds;
+            if scene_state.fall_timeout < 0.0 {
+                if !scene_state.tetrimino.move_down(&scene_state.board) {
+                    &scene_state.board.update(&scene_state.tetrimino, &mut scene_state.score);
+                    let mut rng = rand::thread_rng();
+                    scene_state.tetrimino = Tetrimino::from(&scene_state.next_tetrimino);
+                    scene_state.next_tetrimino = TetriminoType::from_code(rng.gen_range(1, 8)).unwrap();
+                }
+                scene_state.fall_timeout = FALL_TIME / (scene_state.score.level + 1).to_f32().unwrap();
+            }
+        }
+        SceneSwitch::None
+    }
+
+    fn draw(&mut self, shared_state: &mut SharedState, ctx: &mut Context) -> GameResult<()> {
+        let scene_state = &mut self.state;
+        graphics::clear(ctx, BLACK);
+
+        {
+            let assets = &mut shared_state.assets;
+            let board_dimensions = (scene_state.board.width, scene_state.board.height);
+
+            draw_tetrimino(assets, ctx, &scene_state.tetrimino, board_dimensions, None)?;
+            draw_tetrimino(assets, ctx, &Tetrimino::from(&scene_state.next_tetrimino), board_dimensions, Option::from((BOARD_WIDTH, BOARD_HEIGHT/2.0)))?;
+            draw_board(assets, ctx, &scene_state.board, board_dimensions)?;
+            draw_score_board(ctx, &scene_state.score)?;
+        }
+
+        graphics::present(ctx)
+    }
+
+    fn input(&mut self, _game_world: &mut SharedState, event: KeyCode, _started: bool) {
+        let scene_state = &mut self.state;
+
+        match event {
+            KeyCode::Left => {
+                scene_state.tetrimino.move_left(&scene_state.board);
+            }
+            KeyCode::Right => {
+                scene_state.tetrimino.move_right(&scene_state.board);
+            }
+            KeyCode::Down => {
+                scene_state.tetrimino.move_down(&scene_state.board);
+            }
+            KeyCode::Q => {
+                scene_state.tetrimino.rotate_counter_clockwise();
+            }
+            KeyCode::W => {
+                scene_state.tetrimino.rotate_clockwise();
+            }
+            _ => ()
+        }
+    }
+
+    fn name(&self) -> &str {
+        "GamePlayScene"
+    }
+
+    fn draw_previous(&self) -> bool {
+        false
     }
 }
 
@@ -511,59 +614,17 @@ fn draw_score_board(
 
 impl ggez::event::EventHandler for MainState {
     fn update(&mut self, ctx: &mut Context) -> GameResult<()> {
-        const DESIRED_FPS: u32 = 60;
-
-        while timer::check_update_time(ctx, DESIRED_FPS) {
-            let seconds = 1.0 / (DESIRED_FPS as f32);
-
-            self.fall_timeout -= seconds;
-            if self.fall_timeout < 0.0 {
-                if !self.tetrimino.move_down(&self.board) {
-                    &self.board.update(&self.tetrimino, &mut self.score);
-                    let mut rng = rand::thread_rng();
-                    self.tetrimino = Tetrimino::from(&self.next_tetrimino);
-                    self.next_tetrimino = TetriminoType::from_code(rng.gen_range(1, 8)).unwrap();
-                }
-                self.fall_timeout = FALL_TIME / (self.score.level + 1).to_f32().unwrap();
-            }
-        }
+        self.scenes.update(ctx);
         Ok(())
     }
+
     fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
-        graphics::clear(ctx, BLACK);
-
-        {
-            let assets = &mut self.assets;
-            let board_dimensions = (self.board.width, self.board.height);
-
-            draw_tetrimino(assets, ctx, &self.tetrimino, board_dimensions, None)?;
-            draw_tetrimino(assets, ctx, &Tetrimino::from(&self.next_tetrimino), board_dimensions, Option::from((BOARD_WIDTH, BOARD_HEIGHT/2.0)))?;
-            draw_board(assets, ctx, &self.board, board_dimensions)?;
-            draw_score_board(ctx, &self.score)?;
-        }
-
-        graphics::present(ctx)
+        self.scenes.draw(ctx);
+        Ok(())
     }
 
     fn key_down_event(&mut self, _ctx: &mut Context, keycode: KeyCode, _keymods: KeyMods, _repeat: bool) {
-        match keycode {
-            KeyCode::Left => {
-                self.tetrimino.move_left(&self.board);
-            }
-            KeyCode::Right => {
-                self.tetrimino.move_right(&self.board);
-            }
-            KeyCode::Down => {
-                self.tetrimino.move_down(&self.board);
-            }
-            KeyCode::Q => {
-                self.tetrimino.rotate_counter_clockwise();
-            }
-            KeyCode::W => {
-                self.tetrimino.rotate_clockwise();
-            }
-            _ => ()
-        }
+        self.scenes.input(keycode, false)
     }
 }
 
@@ -587,7 +648,7 @@ fn main() -> GameResult {
         .build()
         .unwrap();
 
-    let game = &mut MainState::new(ctx)?;
+    let game = &mut MainState::new(ctx, SharedState::new(ctx)?)?;
 
     event::run(ctx, event_loop, game)
 }
