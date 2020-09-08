@@ -404,7 +404,7 @@ impl GamePlayState {
         let next_tetrimino = TetriminoType::from_code(rng.gen_range(1, 8)).unwrap();
         let score = ScoreBoard::new();
 
-        let s = GamePlayState {
+        let game_play_state = GamePlayState {
             board,
             fall_timeout: FALL_TIME,
             next_tetrimino,
@@ -412,7 +412,7 @@ impl GamePlayState {
             tetrimino,
         };
 
-        Ok(s)
+        Ok(game_play_state)
     }
 }
 
@@ -421,16 +421,82 @@ struct MainState {
 }
 
 impl MainState {
-    fn new(ctx: &mut Context, global_state: SharedState) -> GameResult<MainState> {
-        let s = MainState {
-            scenes: SceneStack::new(ctx, global_state)
+    fn new(ctx: &mut Context) -> GameResult<MainState> {
+        let shared_state = SharedState::new(ctx)?;
+        let mut main_state = MainState {
+            scenes: SceneStack::new(ctx, shared_state)
         };
-        Ok(s)
+        main_state.scenes.push(GamePlayScene::new()?);
+        main_state.scenes.push(StartScene::new()?);
+        Ok(main_state)
+    }
+}
+
+struct StartScene {
+    start: bool
+}
+
+impl StartScene {
+    fn new() -> GameResult<Box<StartScene>> {
+        let game_play_scene = StartScene {
+            start: false
+        };
+        Ok(Box::new(game_play_scene))
+    }
+}
+
+impl Scene<SharedState, KeyCode> for StartScene {
+    fn update(&mut self, _shared_state: &mut SharedState, _ctx: &mut Context) -> SceneSwitch<SharedState, KeyCode> {
+        if self.start {
+            SceneSwitch::Pop
+        } else {
+            SceneSwitch::None
+        }
+    }
+
+    fn draw(&mut self, _shared_state: &mut SharedState, ctx: &mut Context) -> GameResult<()> {
+        graphics::clear(ctx, BLACK);
+
+        let some_text = Text::new("START SCENE");
+
+        graphics::draw(
+            ctx,
+            &some_text,
+            (ScreenPoint2::new(100.0,100.0), graphics::WHITE)
+        )?;
+
+        graphics::present(ctx)
+    }
+
+    fn input(&mut self, _shared_state: &mut SharedState, event: KeyCode, _started: bool) {
+        match event {
+            KeyCode::Space => {
+                self.start = true;
+            }
+            _ => ()
+        }
+    }
+
+    fn name(&self) -> &str {
+        "StartScene"
+    }
+
+    fn draw_previous(&self) -> bool {
+        false
     }
 }
 
 struct GamePlayScene {
     state: GamePlayState
+}
+
+impl GamePlayScene {
+    fn new() -> GameResult<Box<GamePlayScene>> {
+        let game_play_scene = GamePlayScene {
+            state: GamePlayState::new()?
+        };
+        Ok(Box::new(game_play_scene))
+    }
 }
 
 impl Scene<SharedState, KeyCode> for GamePlayScene {
@@ -648,7 +714,7 @@ fn main() -> GameResult {
         .build()
         .unwrap();
 
-    let game = &mut MainState::new(ctx, SharedState::new(ctx)?)?;
+    let game = &mut MainState::new(ctx)?;
 
     event::run(ctx, event_loop, game)
 }
