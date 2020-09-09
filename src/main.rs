@@ -1,5 +1,5 @@
 use ggez::graphics::{BLACK, Image, Text};
-use ggez::event::{KeyMods, KeyCode};
+use ggez::event::{KeyMods, KeyCode, quit};
 use ggez::{nalgebra as na, GameResult, Context, ContextBuilder, conf, graphics, event, timer};
 use std::env;
 use std::path;
@@ -231,7 +231,7 @@ impl Tetrimino {
     const COUNTER_CLOCKWISE_MATRIX: [i8; 4] = [0, 1, -1, 0];
 
     fn from(kind: &TetriminoType) -> Tetrimino {
-        let pos = WorldPoint2::new(4, 1);
+        let pos = WorldPoint2::new(5, 1);
         match kind {
             TetriminoType::I => Tetrimino {
                 kind: TetriminoType::I,
@@ -426,6 +426,7 @@ impl MainState {
         let mut main_state = MainState {
             scenes: SceneStack::new(ctx, shared_state)
         };
+        main_state.scenes.push(GameOverScene::new()?);
         main_state.scenes.push(GamePlayScene::new()?);
         main_state.scenes.push(StartScene::new()?);
         Ok(main_state)
@@ -438,10 +439,10 @@ struct StartScene {
 
 impl StartScene {
     fn new() -> GameResult<Box<StartScene>> {
-        let game_play_scene = StartScene {
+        let start_scene = StartScene {
             start: false
         };
-        Ok(Box::new(game_play_scene))
+        Ok(Box::new(start_scene))
     }
 }
 
@@ -508,7 +509,10 @@ impl Scene<SharedState, KeyCode> for GamePlayScene {
 
             scene_state.fall_timeout -= seconds;
             if scene_state.fall_timeout < 0.0 {
-                if !scene_state.tetrimino.move_down(&scene_state.board) {
+                let can_move = scene_state.tetrimino.move_down(&scene_state.board);
+                if !can_move && scene_state.tetrimino.pos.y == 1 {
+                    return SceneSwitch::Pop;
+                } else if !can_move {
                     &scene_state.board.update(&scene_state.tetrimino, &mut scene_state.score);
                     let mut rng = rand::thread_rng();
                     scene_state.tetrimino = Tetrimino::from(&scene_state.next_tetrimino);
@@ -569,6 +573,58 @@ impl Scene<SharedState, KeyCode> for GamePlayScene {
     }
 }
 
+struct GameOverScene {
+    quit: bool
+}
+
+impl GameOverScene {
+    fn new() -> GameResult<Box<GameOverScene>> {
+        let game_over_scene = GameOverScene {
+            quit: false
+        };
+        Ok(Box::new(game_over_scene))
+    }
+}
+
+impl Scene<SharedState, KeyCode> for GameOverScene {
+    fn update(&mut self, _shared_state: &mut SharedState, ctx: &mut Context) -> SceneSwitch<SharedState, KeyCode> {
+        if self.quit {
+            quit(ctx);
+        }
+        SceneSwitch::None
+    }
+
+    fn draw(&mut self, _shared_state: &mut SharedState, ctx: &mut Context) -> GameResult<()> {
+        graphics::clear(ctx, BLACK);
+
+        let some_text = Text::new("GAME OVER SCENE");
+
+        graphics::draw(
+            ctx,
+            &some_text,
+            (ScreenPoint2::new(100.0,100.0), graphics::WHITE)
+        )?;
+
+        graphics::present(ctx)
+    }
+
+    fn input(&mut self, _shared_state: &mut SharedState, event: KeyCode, _started: bool) {
+        match event {
+            KeyCode::Escape => {
+                self.quit = true;
+            }
+            _ => ()
+        }
+    }
+
+    fn name(&self) -> &str {
+        "GameOverScene"
+    }
+
+    fn draw_previous(&self) -> bool {
+        false
+    }
+}
 fn to_matrix_index(x: i8, y: i8) -> (usize, usize) {
     (usize::try_from(y).expect("Failed to convert Y coordinate"),
      usize::try_from(x).expect("Failed to convert X coordinate"))
