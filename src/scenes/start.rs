@@ -4,6 +4,7 @@ use ggez::event::KeyCode;
 use ggez::graphics::{Text, BLACK, Scale, Font, TextFragment, Color, Drawable, DrawParam};
 use crate::SharedState;
 use crate::types::ScreenPoint2;
+use ggez::timer::TimeContext;
 
 pub struct StartScene {
     start: bool
@@ -21,6 +22,7 @@ impl StartScene {
 impl Scene<SharedState, KeyCode> for StartScene {
     fn update(&mut self, _shared_state: &mut SharedState, _ctx: &mut Context) -> SceneSwitch<SharedState, KeyCode> {
         if self.start {
+            _ctx.timer_context = TimeContext::new();
             SceneSwitch::Pop
         } else {
             SceneSwitch::None
@@ -81,15 +83,15 @@ impl Scene<SharedState, KeyCode> for StartScene {
             .add(r_fragment)
             .add(i_fragment)
             .add(s_fragment)
-            .draw(ctx, DrawParam::from((ScreenPoint2::new(100.0, 100.0), )));
+            .draw(ctx, DrawParam::from((ScreenPoint2::new(100.0, 100.0), )))?;
 
         Text::new("PRESS SPACE TO START")
             .set_font(font.unwrap(), Scale::uniform(20.0))
-            .draw(ctx, DrawParam::from((ScreenPoint2::new(200.0, 450.0), )));
+            .draw(ctx, DrawParam::from((ScreenPoint2::new(200.0, 450.0), )))?;
 
         Text::new("CONTROLS: ARROW KEYS + W/Q FOR ROTATING CLOCKWISE/COUNTER CLOCKWISE")
             .set_font(font.unwrap(), Scale::uniform(10.0))
-            .draw(ctx, DrawParam::from((ScreenPoint2::new(50.0, 500.0), )));
+            .draw(ctx, DrawParam::from((ScreenPoint2::new(50.0, 500.0), )))?;
 
         graphics::present(ctx)
     }
