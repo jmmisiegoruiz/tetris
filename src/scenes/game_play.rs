@@ -51,7 +51,7 @@ impl GamePlayScene {
 }
 
 impl Scene<SharedState, KeyCode> for GamePlayScene {
-    fn update(&mut self, _game_world: &mut SharedState, ctx: &mut Context) -> SceneSwitch<SharedState, KeyCode> {
+    fn update(&mut self, _shared_state: &mut SharedState, ctx: &mut Context) -> SceneSwitch<SharedState, KeyCode> {
         let scene_state = &mut self.state;
         const DESIRED_FPS: u32 = 60;
         while timer::check_update_time(ctx, DESIRED_FPS) {
