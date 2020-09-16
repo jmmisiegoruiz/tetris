@@ -1,27 +1,32 @@
-use ggez::{GameResult, Context, graphics};
+use ggez::{GameResult, Context, graphics, audio};
 use ggez_goodies::scene::{Scene, SceneSwitch};
 use ggez::event::KeyCode;
 use ggez::graphics::{Text, BLACK, Scale, Font, TextFragment, Color, Drawable, DrawParam};
 use crate::SharedState;
 use crate::types::ScreenPoint2;
 use ggez::timer::TimeContext;
+use ggez::audio::SoundSource;
 
 pub struct StartScene {
-    start: bool
+    theme: audio::Source
 }
 
 impl StartScene {
-    pub fn new() -> GameResult<Box<StartScene>> {
+    pub fn new(ctx: &mut Context) -> GameResult<Box<StartScene>> {
+        let mut theme=  audio::Source::new(ctx, "/Tetris_theme.ogg")?;
+        theme.set_repeat(true);
+        theme.play()?;
+
         let start_scene = StartScene {
-            start: false
+            theme
         };
         Ok(Box::new(start_scene))
     }
 }
 
 impl Scene<SharedState, KeyCode> for StartScene {
-    fn update(&mut self, _shared_state: &mut SharedState, _ctx: &mut Context) -> SceneSwitch<SharedState, KeyCode> {
-        if self.start {
+    fn update(&mut self, shared_state: &mut SharedState, _ctx: &mut Context) -> SceneSwitch<SharedState, KeyCode> {
+        if shared_state.game_started {
             _ctx.timer_context = TimeContext::new();
             SceneSwitch::Pop
         } else {
@@ -96,10 +101,11 @@ impl Scene<SharedState, KeyCode> for StartScene {
         graphics::present(ctx)
     }
 
-    fn input(&mut self, _shared_state: &mut SharedState, event: KeyCode, _started: bool) {
+    fn input(&mut self, shared_state: &mut SharedState, event: KeyCode, _started: bool) {
         match event {
             KeyCode::Space => {
-                self.start = true;
+                shared_state.game_started = true;
+                self.theme.stop();
             }
             _ => ()
         }

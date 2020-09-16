@@ -17,6 +17,7 @@ mod drawing;
 mod resources;
 
 pub struct SharedState {
+    game_started: bool,
     assets: Assets
 }
 
@@ -25,6 +26,7 @@ impl SharedState {
         let assets = Assets::new(ctx)?;
 
         let s = SharedState {
+            game_started: false,
             assets
         };
 
@@ -44,7 +46,7 @@ impl MainState {
         };
         main_state.scenes.push(game_over::GameOverScene::new()?);
         main_state.scenes.push(game_play::GamePlayScene::new()?);
-        main_state.scenes.push(start::StartScene::new()?);
+        main_state.scenes.push(start::StartScene::new(ctx)?);
         Ok(main_state)
     }
 }
