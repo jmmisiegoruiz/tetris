@@ -16,6 +16,16 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - name: Install latest nightly
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly
+        override: true
+        components: rustfmt, clippy
+    - name: Install build-essential
+      run: |
+        apt-get update
+        apt-get install build-essential -qq
     - name: Build
       run: cargo build --verbose
     - name: Run tests
