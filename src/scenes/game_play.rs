@@ -1,4 +1,4 @@
-use ggez::{GameResult, Context, graphics, timer};
+use ggez::{GameResult, Context, graphics, timer, audio};
 use ggez_goodies::scene::{Scene, SceneSwitch};
 use ggez::event::KeyCode;
 use rand::Rng;
@@ -8,6 +8,8 @@ use crate::constants::{BOARD_WIDTH, BOARD_HEIGHT, FALL_TIME};
 use crate::world::{Board, TetriminoType, Tetrimino, ScoreBoard};
 use crate::drawing::{draw_tetrimino, draw_board, draw_score_board};
 use ggez::graphics::BLACK;
+use ggez::audio::SoundSource;
+
 
 struct GamePlayState {
     board: Board,
@@ -37,14 +39,31 @@ impl GamePlayState {
     }
 }
 
+struct SoundEffects {
+    fall: audio::Source,
+    line: audio::Source,
+}
+
+impl SoundEffects {
+    fn new(ctx: &mut Context) -> GameResult<Self> {
+        let sound_effects = SoundEffects {
+            fall: audio::Source::new(ctx, "/fall.ogg")?,
+            line: audio::Source::new(ctx, "/line.ogg")?,
+        };
+        Ok(sound_effects)
+    }
+}
+
 pub struct GamePlayScene {
-    state: GamePlayState
+    state: GamePlayState,
+    sound_effects: SoundEffects
 }
 
 impl GamePlayScene {
-    pub fn new() -> GameResult<Box<GamePlayScene>> {
+    pub fn new(ctx: &mut Context) -> GameResult<Box<GamePlayScene>> {
         let game_play_scene = GamePlayScene {
-            state: GamePlayState::new()?
+            state: GamePlayState::new()?,
+            sound_effects: SoundEffects::new(ctx)?
         };
         Ok(Box::new(game_play_scene))
     }
@@ -63,7 +82,10 @@ impl Scene<SharedState, KeyCode> for GamePlayScene {
                 if !can_move && scene_state.tetrimino.pos.y == 1 {
                     return SceneSwitch::Pop;
                 } else if !can_move {
-                    &scene_state.board.update(&scene_state.tetrimino, &mut scene_state.score);
+                    self.sound_effects.fall.play().unwrap();
+                    if &scene_state.board.update(&scene_state.tetrimino, &mut scene_state.score) > &0 {
+                        self.sound_effects.line.play().unwrap();
+                    };
                     let mut rng = rand::thread_rng();
                     scene_state.tetrimino = Tetrimino::from(&scene_state.next_tetrimino);
                     scene_state.next_tetrimino = TetriminoType::from_code(rng.gen_range(1, 8)).unwrap();
