@@ -86,7 +86,7 @@ impl Board {
         }
     }
 
-    pub fn update(&mut self, tetrimino: &Tetrimino, score: &mut ScoreBoard) {
+    pub fn update(&mut self, tetrimino: &Tetrimino, score: &mut ScoreBoard) -> u8 {
         *self.data.index_mut(to_matrix_index(tetrimino.pos.x, tetrimino.pos.y)) = tetrimino.kind.to_code();
         for vector in tetrimino.vectors.iter() {
             *self.data.index_mut(to_matrix_index(tetrimino.pos.x + vector.x, tetrimino.pos.y + vector.y)) = tetrimino.kind.to_code();
@@ -138,6 +138,7 @@ impl Board {
         };
 
         self.data = updated_data;
+        cleaned_lines
     }
 }
 

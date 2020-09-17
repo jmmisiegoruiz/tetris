@@ -45,7 +45,7 @@ impl MainState {
             scenes: SceneStack::new(ctx, shared_state)
         };
         main_state.scenes.push(game_over::GameOverScene::new()?);
-        main_state.scenes.push(game_play::GamePlayScene::new()?);
+        main_state.scenes.push(game_play::GamePlayScene::new(ctx)?);
         main_state.scenes.push(start::StartScene::new(ctx)?);
         Ok(main_state)
     }
