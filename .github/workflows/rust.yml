@@ -22,10 +22,11 @@ jobs:
         toolchain: nightly
         override: true
         components: rustfmt, clippy
-    - name: Install build-essential
+    - name: Install required dev packages
       run: |
         apt-get update
-        apt-get install build-essential -qq
+        apt-get install sudo
+        sudo apt-get install build-essential libasound2-dev libudev-dev pkg-config -qq
     - name: Build
       run: cargo build --verbose
     - name: Run tests
