@@ -24,8 +24,7 @@ jobs:
         components: rustfmt, clippy
     - name: Install required dev packages
       run: |
-        apt-get install sudo
-        apt-get update
+        sudo apt-get update
         sudo apt-get install build-essential libasound2-dev libudev-dev pkg-config -qq
     - name: Build
       run: cargo build --verbose
