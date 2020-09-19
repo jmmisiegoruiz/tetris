@@ -3,6 +3,8 @@ name: Rust
 on:
   push:
     branches: [ master ]
+    tags:
+      - v*.*.*
   pull_request:
     branches: [ master ]
 
@@ -27,6 +29,17 @@ jobs:
         sudo apt-get update
         sudo apt-get install build-essential libasound2-dev libudev-dev pkg-config -qq
     - name: Build
-      run: cargo build --verbose
+      run: |
+        cargo build --release --verbose
+        strip target/release/tetris
+        mv target/release/tetris target/release/tetris_linux
     - name: Run tests
       run: cargo test --verbose
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: |
+          target/release/tetris_linux
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
