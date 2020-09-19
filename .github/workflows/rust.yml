@@ -46,7 +46,7 @@ jobs:
 
   build-mac:
 
-    runs-on: mac-latest
+    runs-on: macos-latest
 
     steps:
       - uses: actions/checkout@v2
@@ -57,11 +57,7 @@ jobs:
           target: x86_64-apple-darwin
           override: true
           components: rustfmt, clippy
-      - name: Install required dev packages
-        run: |
-          sudo apt-get update
-          sudo apt-get install build-essential libasound2-dev libudev-dev pkg-config -qq
-      - name: Build form Mac
+      - name: Build for Mac
         run: |
           cargo build --release --verbose
           strip target/release/tetris
