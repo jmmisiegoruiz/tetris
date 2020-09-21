@@ -87,9 +87,13 @@ impl Board {
     }
 
     pub fn update(&mut self, tetrimino: &Tetrimino, score: &mut ScoreBoard) -> u8 {
-        *self.data.index_mut(to_matrix_index(tetrimino.pos.x, tetrimino.pos.y)) = tetrimino.kind.to_code();
+        if let Some(matrix_index) = to_matrix_index(tetrimino.pos.x, tetrimino.pos.y) {
+            *self.data.index_mut(matrix_index) = tetrimino.kind.to_code();
+        }
         for vector in tetrimino.vectors.iter() {
-            *self.data.index_mut(to_matrix_index(tetrimino.pos.x + vector.x, tetrimino.pos.y + vector.y)) = tetrimino.kind.to_code();
+            if let Some(matrix_index) = to_matrix_index(tetrimino.pos.x + vector.x, tetrimino.pos.y + vector.y) {
+                *self.data.index_mut(matrix_index) = tetrimino.kind.to_code();
+            }
         }
 
         let mut updated_data: MatrixMN<u8, U21, U12> = MatrixMN::<u8, U20, U10>::zeros()
@@ -219,33 +223,18 @@ impl Tetrimino {
         for vector in self.vectors.iter() {
             match direction {
                 Direction::DOWN => {
-                    if let Some(value) = board.data.get(to_matrix_index(
-                        self.pos.x + vector.x,
-                        self.pos.y + vector.y + 1,
-                    )) {
-                        if value > &0 {
-                            can_move = false;
-                        }
+                    if !board_position_empty(self.pos.x + vector.x, self.pos.y + vector.y + 1, board) {
+                        can_move = false;
                     }
                 }
                 Direction::LEFT => {
-                    if let Some(value) = board.data.get(to_matrix_index(
-                        self.pos.x + vector.x - 1,
-                        self.pos.y + vector.y,
-                    )) {
-                        if value > &0 {
-                            can_move = false;
-                        }
+                    if !board_position_empty(self.pos.x + vector.x - 1, self.pos.y + vector.y, board) {
+                        can_move = false;
                     }
                 }
                 Direction::RIGHT => {
-                    if let Some(value) = board.data.get(to_matrix_index(
-                        self.pos.x + vector.x + 1,
-                        self.pos.y + vector.y,
-                    )) {
-                        if value > &0 {
-                            can_move = false;
-                        }
+                    if !board_position_empty(self.pos.x + vector.x + 1, self.pos.y + vector.y, board) {
+                        can_move = false;
                     }
                 }
             }
@@ -256,27 +245,42 @@ impl Tetrimino {
         can_move
     }
 
-    pub fn rotate_counter_clockwise(&mut self) {
+    pub fn rotate_counter_clockwise(&mut self, board: &Board) {
         let rotation_matrix = Matrix2::from_row_slice(&Tetrimino::COUNTER_CLOCKWISE_MATRIX);
         let mut new_vectors = ArrayVec::<[WorldVector2; 3]>::new();
+        let mut can_rotate = true;
 
         for vector in self.vectors.iter() {
-            let result = rotation_matrix * vector;
+            let result: WorldVector2 = rotation_matrix * vector;
+            if !board_position_empty(self.pos.x + result.x, self.pos.y + result.y, board) {
+                can_rotate = false;
+                break;
+            }
             new_vectors.push(result);
         }
-        self.vectors = new_vectors.into_inner().unwrap();
+
+        if can_rotate {
+            self.vectors = new_vectors.into_inner().unwrap();
+        }
     }
 
-    pub fn rotate_clockwise(&mut self) {
+    pub fn rotate_clockwise(&mut self, board: &Board) {
         let rotation_matrix = Matrix2::from_row_slice(&Tetrimino::CLOCKWISE_MATRIX);
         let mut new_vectors = ArrayVec::<[WorldVector2; 3]>::new();
+        let mut can_rotate = true;
 
         for vector in self.vectors.iter() {
             let result = rotation_matrix * vector;
+            if !board_position_empty(self.pos.x + result.x, self.pos.y + result.y, board) {
+                can_rotate = false;
+                break;
+            }
             new_vectors.push(result);
         }
-        self.vectors = new_vectors.into_inner().unwrap();
-    }
+
+        if can_rotate {
+            self.vectors = new_vectors.into_inner().unwrap();
+        }    }
 }
 
 pub struct ScoreBoard {
@@ -295,7 +299,32 @@ impl ScoreBoard {
     }
 }
 
-fn to_matrix_index(x: i8, y: i8) -> (usize, usize) {
-    (usize::try_from(y).expect("Failed to convert Y coordinate"),
-     usize::try_from(x).expect("Failed to convert X coordinate"))
+fn to_matrix_index(x_coordinate: i8, y_coordinate: i8) -> Option<(usize, usize)> {
+    match usize::try_from(x_coordinate) {
+        Ok(x_index) => {
+            match usize::try_from(y_coordinate) {
+                Ok(y_index) => {
+                    Some((y_index, x_index))
+                }
+                _ => {
+                    None
+                }
+            }
+        }
+        _ => {
+            None
+        }
+    }
+}
+
+fn board_position_empty(x: i8, y: i8, board: &Board) -> bool {
+    let mut position_empty = true;
+    if let Some(matrix_index) = to_matrix_index(x, y) {
+        if let Some(value) = board.data.get(matrix_index) {
+            if value > &0 {
+                position_empty = false;
+            }
+        }
+    }
+    position_empty
 }
