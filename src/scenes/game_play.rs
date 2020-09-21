@@ -127,10 +127,10 @@ impl Scene<SharedState, KeyCode> for GamePlayScene {
                 scene_state.tetrimino.move_down(&scene_state.board);
             }
             KeyCode::Q => {
-                scene_state.tetrimino.rotate_counter_clockwise();
+                scene_state.tetrimino.rotate_counter_clockwise(&scene_state.board);
             }
             KeyCode::W => {
-                scene_state.tetrimino.rotate_clockwise();
+                scene_state.tetrimino.rotate_clockwise(&scene_state.board);
             }
             _ => ()
         }
