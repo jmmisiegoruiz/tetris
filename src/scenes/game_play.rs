@@ -7,7 +7,7 @@ use crate::SharedState;
 use crate::constants::{BOARD_WIDTH, BOARD_HEIGHT, FALL_TIME};
 use crate::world::{Board, TetriminoType, Tetrimino, ScoreBoard};
 use crate::drawing::{draw_tetrimino, draw_board, draw_score_board};
-use ggez::graphics::{BLACK, Text, Font, Scale};
+use ggez::graphics::{BLACK, Text, Scale};
 use ggez::audio::SoundSource;
 use crate::types::ScreenPoint2;
 
@@ -116,15 +116,14 @@ impl Scene<SharedState, KeyCode> for GamePlayScene {
             draw_tetrimino(assets, ctx, &scene_state.tetrimino, board_dimensions, None)?;
             draw_tetrimino(assets, ctx, &Tetrimino::from(&scene_state.next_tetrimino), board_dimensions, Option::from((BOARD_WIDTH, BOARD_HEIGHT / 2.0)))?;
             draw_board(assets, ctx, &scene_state.board, board_dimensions)?;
-            draw_score_board(ctx, &scene_state.score)?;
+            draw_score_board(ctx, &scene_state.score, shared_state)?;
 
             if scene_state.game_over {
-                let mut some_text = Text::new("GAME OVER");
-                let font = Font::new(ctx, "/PressStart2P-Regular.ttf").unwrap();
-                some_text.set_font(font, Scale::uniform(50.0));
+                let mut game_over_text = Text::new("GAME OVER");
+                game_over_text.set_font(shared_state.assets.font, Scale::uniform(50.0));
                 graphics::draw(
                     ctx,
-                    &some_text,
+                    &game_over_text,
                     (ScreenPoint2::new(180.0,30.0), graphics::WHITE)
                 )?;
             }

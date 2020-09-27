@@ -8,6 +8,7 @@ use scenes::game_play;
 use types::SceneStack;
 use crate::resources::Assets;
 use crate::constants::{SCREEN_WIDTH, SCREEN_HEIGHT};
+use ggez::audio::SoundSource;
 
 mod scenes;
 mod world;
@@ -40,13 +41,16 @@ struct MainState {
 
 impl MainState {
     fn new(ctx: &mut Context) -> GameResult<MainState> {
-        let shared_state = SharedState::new(ctx)?;
+        let mut shared_state = SharedState::new(ctx)?;
+        shared_state.assets.theme.set_repeat(true);
+        shared_state.assets.theme.play()?;
+
         let mut main_state = MainState {
             scenes: SceneStack::new(ctx, shared_state)
         };
         main_state.scenes.push(game_over::GameOverScene::new()?);
         main_state.scenes.push(game_play::GamePlayScene::new(ctx)?);
-        main_state.scenes.push(start::StartScene::new(ctx)?);
+        main_state.scenes.push(start::StartScene::new()?);
         Ok(main_state)
     }
 }
