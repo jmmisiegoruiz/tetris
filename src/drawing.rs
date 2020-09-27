@@ -1,10 +1,11 @@
 use crate::resources::Assets;
 use crate::constants::{BOARD_WIDTH, BOARD_HEIGHT};
 use ggez::{Context, GameResult, graphics};
-use ggez::graphics::Text;
+use ggez::graphics::{Text, Scale};
 use std::convert::TryFrom;
 use crate::world::{Tetrimino, TetriminoType, ScoreBoard, Board};
 use crate::types::{ScreenPoint2, WorldPoint2};
+use crate::SharedState;
 
 pub fn draw_tetrimino(
     assets: &mut Assets,
@@ -73,11 +74,19 @@ pub fn draw_board(
 pub fn draw_score_board(
     ctx: &mut Context,
     score_board: &ScoreBoard,
+    shared_state: &SharedState,
 ) -> GameResult {
-    let lines = Text::new(format!("LINES: {}", score_board.lines));
-    let score = Text::new(format!("SCORE: {}", score_board.score));
-    let level = Text::new(format!("LEVEL: {}", score_board.level));
-    let next_piece = Text::new("NEXT_PIECE");
+    let mut lines = Text::new(format!("LINES: {}", score_board.lines));
+    lines.set_font(shared_state.assets.font, Scale::uniform(10.0));
+
+    let mut score = Text::new(format!("SCORE: {}", score_board.score));
+    score.set_font(shared_state.assets.font, Scale::uniform(10.0));
+
+    let mut level = Text::new(format!("LEVEL: {}", score_board.level));
+    level.set_font(shared_state.assets.font, Scale::uniform(10.0));
+
+    let mut next_piece = Text::new("NEXT");
+    next_piece.set_font(shared_state.assets.font, Scale::uniform(10.0));
 
     graphics::draw(
         ctx,

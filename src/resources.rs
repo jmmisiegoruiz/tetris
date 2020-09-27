@@ -1,5 +1,5 @@
-use ggez::{graphics, Context, GameResult};
-use ggez::graphics::Image;
+use ggez::{graphics, Context, GameResult, audio};
+use ggez::graphics::{Image, Font};
 use crate::world::{TetriminoType, BoardType};
 
 pub struct Assets {
@@ -11,6 +11,8 @@ pub struct Assets {
     t_block_image: graphics::Image,
     z_block_image: graphics::Image,
     b_block_image: graphics::Image,
+    pub font: Font,
+    pub theme: audio::Source
 }
 
 impl Assets {
@@ -24,6 +26,8 @@ impl Assets {
             t_block_image: graphics::Image::new(ctx, "/t_block.png")?,
             z_block_image: graphics::Image::new(ctx, "/z_block.png")?,
             b_block_image: graphics::Image::new(ctx, "/b_block.png")?,
+            font: Font::new(ctx, "/PressStart2P-Regular.ttf")?,
+            theme: audio::Source::new(ctx, "/Tetris_theme.ogg")?,
         })
     }
 

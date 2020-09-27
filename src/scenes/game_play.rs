@@ -7,13 +7,15 @@ use crate::SharedState;
 use crate::constants::{BOARD_WIDTH, BOARD_HEIGHT, FALL_TIME};
 use crate::world::{Board, TetriminoType, Tetrimino, ScoreBoard};
 use crate::drawing::{draw_tetrimino, draw_board, draw_score_board};
-use ggez::graphics::BLACK;
+use ggez::graphics::{BLACK, Text, Scale};
 use ggez::audio::SoundSource;
+use crate::types::ScreenPoint2;
 
 
 struct GamePlayState {
     board: Board,
     fall_timeout: f32,
+    game_over: bool,
     next_tetrimino: TetriminoType,
     score: ScoreBoard,
     tetrimino: Tetrimino,
@@ -30,6 +32,7 @@ impl GamePlayState {
         let game_play_state = GamePlayState {
             board,
             fall_timeout: FALL_TIME,
+            game_over: false,
             next_tetrimino,
             score,
             tetrimino,
@@ -41,6 +44,7 @@ impl GamePlayState {
 
 struct SoundEffects {
     fall: audio::Source,
+    game_over: audio::Source,
     line: audio::Source,
 }
 
@@ -49,6 +53,7 @@ impl SoundEffects {
         let sound_effects = SoundEffects {
             fall: audio::Source::new(ctx, "/fall.ogg")?,
             line: audio::Source::new(ctx, "/line.ogg")?,
+            game_over: audio::Source::new(ctx, "/game_over.ogg")?,
         };
         Ok(sound_effects)
     }
@@ -80,7 +85,11 @@ impl Scene<SharedState, KeyCode> for GamePlayScene {
             if scene_state.fall_timeout < 0.0 {
                 let can_move = scene_state.tetrimino.move_down(&scene_state.board);
                 if !can_move && scene_state.tetrimino.pos.y == 1 {
-                    return SceneSwitch::Pop;
+                    if !self.state.game_over {
+                        self.state.game_over = true;
+                        self.sound_effects.game_over.play().unwrap();
+                    }
+                    return SceneSwitch::None;
                 } else if !can_move {
                     self.sound_effects.fall.play().unwrap();
                     if &scene_state.board.update(&scene_state.tetrimino, &mut scene_state.score) > &0 {
@@ -107,7 +116,17 @@ impl Scene<SharedState, KeyCode> for GamePlayScene {
             draw_tetrimino(assets, ctx, &scene_state.tetrimino, board_dimensions, None)?;
             draw_tetrimino(assets, ctx, &Tetrimino::from(&scene_state.next_tetrimino), board_dimensions, Option::from((BOARD_WIDTH, BOARD_HEIGHT / 2.0)))?;
             draw_board(assets, ctx, &scene_state.board, board_dimensions)?;
-            draw_score_board(ctx, &scene_state.score)?;
+            draw_score_board(ctx, &scene_state.score, shared_state)?;
+
+            if scene_state.game_over {
+                let mut game_over_text = Text::new("GAME OVER");
+                game_over_text.set_font(shared_state.assets.font, Scale::uniform(50.0));
+                graphics::draw(
+                    ctx,
+                    &game_over_text,
+                    (ScreenPoint2::new(180.0,30.0), graphics::WHITE)
+                )?;
+            }
         }
 
         graphics::present(ctx)
