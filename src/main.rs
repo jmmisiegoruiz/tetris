@@ -16,6 +16,7 @@ mod constants;
 mod types;
 mod drawing;
 mod resources;
+mod experimental;
 
 pub struct SharedState {
     game_started: bool,
