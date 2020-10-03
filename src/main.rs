@@ -9,6 +9,9 @@ use types::SceneStack;
 use crate::resources::Assets;
 use crate::constants::{SCREEN_WIDTH, SCREEN_HEIGHT};
 use ggez::audio::SoundSource;
+use crate::experimental::new_executor_and_spawner;
+use crate::timer::TimerFuture;
+use std::time::Duration;
 
 mod scenes;
 mod world;
@@ -17,10 +20,11 @@ mod types;
 mod drawing;
 mod resources;
 mod experimental;
+mod timer;
 
 pub struct SharedState {
     game_started: bool,
-    assets: Assets
+    assets: Assets,
 }
 
 impl SharedState {
@@ -29,7 +33,7 @@ impl SharedState {
 
         let s = SharedState {
             game_started: false,
-            assets
+            assets,
         };
 
         Ok(s)
@@ -73,26 +77,44 @@ impl ggez::event::EventHandler for MainState {
 }
 
 fn main() -> GameResult {
-    let resource_dir = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
-        let mut path = path::PathBuf::from(manifest_dir);
-        path.push("resources");
-        path
-    } else {
-        path::PathBuf::from("./resources")
-    };
+    let (executor, spawner) = new_executor_and_spawner();
 
-    let mut config = conf::Conf::new();
-    config.window_setup.title = String::from("Just another Tetris");
-    config.window_mode.width = SCREEN_WIDTH;
-    config.window_mode.height = SCREEN_HEIGHT;
+    // Spawn a task to print before and after waiting on a timer.
+    spawner.spawn(async {
+        println!("howdy!");
+        // Wait for our timer future to complete after two seconds.
+        TimerFuture::new(Duration::new(2, 0)).await;
+        println!("done!");
+    });
 
-    let (ref mut ctx, ref mut event_loop) = ContextBuilder::new("tetris", "Jose Matias Misiego Ruiz")
-        .conf(config)
-        .add_resource_path(resource_dir)
-        .build()
-        .unwrap();
+    spawner.spawn(async {
+        let resource_dir = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
+            let mut path = path::PathBuf::from(manifest_dir);
+            path.push("resources");
+            path
+        } else {
+            path::PathBuf::from("./resources")
+        };
 
-    let game = &mut MainState::new(ctx)?;
+        let mut config = conf::Conf::new();
+        config.window_setup.title = String::from("Just another Tetris");
+        config.window_mode.width = SCREEN_WIDTH;
+        config.window_mode.height = SCREEN_HEIGHT;
 
-    event::run(ctx, event_loop, game)
+        let (ref mut ctx, ref mut event_loop) = ContextBuilder::new("tetris", "Jose Matias Misiego Ruiz")
+            .conf(config)
+            .add_resource_path(resource_dir)
+            .build()
+            .unwrap();
+
+        let game = &mut MainState::new(ctx).unwrap();
+
+        event::run(ctx, event_loop, game).unwrap();
+    });
+
+    drop(spawner);
+
+    executor.run();
+
+    Ok(())
 }
