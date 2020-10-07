@@ -17,9 +17,9 @@ impl StartScene {
 }
 
 impl Scene<SharedState, KeyCode> for StartScene {
-    fn update(&mut self, shared_state: &mut SharedState, _ctx: &mut Context) -> SceneSwitch<SharedState, KeyCode> {
+    fn update(&mut self, shared_state: &mut SharedState, ctx: &mut Context) -> SceneSwitch<SharedState, KeyCode> {
         if shared_state.game_started {
-            _ctx.timer_context = TimeContext::new();
+            ctx.timer_context = TimeContext::new();
             SceneSwitch::Pop
         } else {
             SceneSwitch::None
