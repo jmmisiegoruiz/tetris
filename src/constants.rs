@@ -7,3 +7,5 @@ pub const POINTS_FOR_ONE_LINE: u32 = 40;
 pub const POINTS_FOR_TWO_LINES: u32 = 100;
 pub const POINTS_FOR_THREE_LINES: u32 = 300;
 pub const POINTS_FOR_MORE_THAN_THREE_LINES: u32 = 1200;
+pub const TOP_BOUNDARY: i8 = 0;
+

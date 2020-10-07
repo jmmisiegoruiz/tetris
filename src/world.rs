@@ -1,6 +1,6 @@
 use ggez::nalgebra::{MatrixMN, Matrix2, U21, U12, U20, U10};
 use arrayvec::ArrayVec;
-use crate::constants::{BOARD_HEIGHT, BOARD_WIDTH, POINTS_FOR_ONE_LINE, POINTS_FOR_TWO_LINES, POINTS_FOR_THREE_LINES, POINTS_FOR_MORE_THAN_THREE_LINES};
+use crate::constants::{BOARD_HEIGHT, BOARD_WIDTH, POINTS_FOR_ONE_LINE, POINTS_FOR_TWO_LINES, POINTS_FOR_THREE_LINES, POINTS_FOR_MORE_THAN_THREE_LINES, TOP_BOUNDARY};
 use std::convert::TryFrom;
 use crate::types::{WorldPoint2, WorldVector2};
 
@@ -158,7 +158,7 @@ impl Tetrimino {
     const COUNTER_CLOCKWISE_MATRIX: [i8; 4] = [0, 1, -1, 0];
 
     pub fn from(kind: &TetriminoType) -> Tetrimino {
-        let pos = WorldPoint2::new(5, 1);
+        let pos = WorldPoint2::new(5, TOP_BOUNDARY);
         match kind {
             TetriminoType::I => Tetrimino {
                 kind: TetriminoType::I,
