@@ -9,8 +9,8 @@ pub struct Assets {
     o_block_image: graphics::Image,
     s_block_image: graphics::Image,
     t_block_image: graphics::Image,
-    z_block_image: graphics::Image,
-    b_block_image: graphics::Image,
+    pub z_block_image: graphics::Image,
+    pub b_block_image: graphics::Image,
     pub font: Font,
     pub theme: audio::Source
 }

@@ -1,10 +1,17 @@
 use ggez::nalgebra::{MatrixMN, Matrix2, U21, U12, U20, U10};
 use arrayvec::ArrayVec;
-use crate::constants::{BOARD_HEIGHT, BOARD_WIDTH, POINTS_FOR_ONE_LINE, POINTS_FOR_TWO_LINES, POINTS_FOR_THREE_LINES, POINTS_FOR_MORE_THAN_THREE_LINES, TOP_BOUNDARY};
+use crate::constants::{BOARD_HEIGHT, BOARD_WIDTH, POINTS_FOR_ONE_LINE, POINTS_FOR_TWO_LINES, POINTS_FOR_THREE_LINES, POINTS_FOR_MORE_THAN_THREE_LINES, TOP_BOUNDARY, SCALE_FACTOR, GRID_STEP};
 use std::convert::TryFrom;
 use crate::types::{WorldPoint2, WorldVector2};
+use crate::ecs::components::{CollisionBox, Image};
+use ncollide2d::na;
+use ncollide2d::na::Isometry2;
+use ncollide2d::shape::{ShapeHandle, Cuboid, Compound};
+use ggez::{GameResult, Context};
+use ggez::graphics::{Color, WHITE};
+use std::f32::consts::{FRAC_PI_2, PI};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TetriminoType {
     I,
     J,
@@ -15,7 +22,359 @@ pub enum TetriminoType {
     Z,
 }
 
+#[derive(Debug, Clone)]
+pub enum Rotation {
+    Zero,
+    FracPi2,
+    Pi,
+    Frac3Pi2,
+}
+
+impl Rotation {
+    pub fn from_value(value: f32) -> Option<Rotation> {
+        let value_to_test = ((value / (2.0 * PI)).fract() * 100.0).round() / 100.0;
+
+        if value_to_test == 0.0 || value_to_test == 1.0 {
+            Some(Rotation::Zero)
+        } else if value_to_test == 0.25 {
+            Some(Rotation::Frac3Pi2)
+        } else if value_to_test == 0.5 {
+            Some(Rotation::Pi)
+        } else if value_to_test == 0.75 {
+            Some(Rotation::FracPi2)
+        } else {
+            None
+        }
+    }
+
+    pub fn to_value(&self) -> f32 {
+        match self {
+            Rotation::Zero => 0.0,
+            Rotation::FracPi2 => FRAC_PI_2,
+            Rotation::Pi => PI,
+            Rotation::Frac3Pi2 => 3.0 * FRAC_PI_2,
+        }
+    }
+}
+
 impl TetriminoType {
+    pub fn collision_box(&self, rotation: Rotation) -> GameResult<CollisionBox> {
+        match self {
+            TetriminoType::T => {
+                let mut shapes = Vec::new();
+                let shape1 = ShapeHandle::new(Cuboid::new(na::Vector2::new(0.5 * SCALE_FACTOR, 0.5 * SCALE_FACTOR)));
+                let shape2 = ShapeHandle::new(Cuboid::new(na::Vector2::new(1.5 * SCALE_FACTOR, 0.5 * SCALE_FACTOR)));
+
+                let delta1 = Isometry2::new(na::Vector2::new(0.0, 0.0), na::zero());
+                shapes.push((delta1, shape1));
+
+                match rotation {
+                    Rotation::Zero => {
+                        let delta2 = Isometry2::new(na::Vector2::new(0.0, -1.0 * GRID_STEP), na::zero());
+                        shapes.push((delta2, shape2));
+                    }
+                    Rotation::FracPi2 => {
+                        let delta2 = Isometry2::new(na::Vector2::new(1.0 * GRID_STEP, 0.0), FRAC_PI_2);
+                        shapes.push((delta2, shape2));
+                    }
+                    Rotation::Pi => {
+                        let delta2 = Isometry2::new(na::Vector2::new(0.0, 1.0 * GRID_STEP), na::zero());
+                        shapes.push((delta2, shape2));
+                    }
+                    Rotation::Frac3Pi2 => {
+                        let delta2 = Isometry2::new(na::Vector2::new(-1.0 * GRID_STEP, 0.0), FRAC_PI_2);
+                        shapes.push((delta2, shape2));
+                    }
+                }
+                Ok(CollisionBox {
+                    rotation: rotation.to_value(),
+                    support_map: Compound::new(shapes),
+                    tetrimino_type: Some((*self).clone()),
+                })
+            }
+            TetriminoType::I => {
+                let mut shapes = Vec::new();
+                let shape = ShapeHandle::new(Cuboid::new(na::Vector2::new(2.0 * SCALE_FACTOR, 0.5 * SCALE_FACTOR)));
+
+                match rotation {
+                    Rotation::Zero => {
+                        let delta = Isometry2::new(na::Vector2::new(0.5 * GRID_STEP, 0.0), na::zero());
+                        shapes.push((delta, shape));
+                    }
+                    Rotation::FracPi2 => {
+                        let delta = Isometry2::new(na::Vector2::new(0.0, 0.5 * GRID_STEP), FRAC_PI_2);
+                        shapes.push((delta, shape));
+                    }
+                    Rotation::Pi => {
+                        let delta = Isometry2::new(na::Vector2::new(-0.5 * GRID_STEP, 0.0), na::zero());
+                        shapes.push((delta, shape));
+                    }
+                    Rotation::Frac3Pi2 => {
+                        let delta = Isometry2::new(na::Vector2::new(0.0, -0.5 * GRID_STEP), FRAC_PI_2);
+                        shapes.push((delta, shape));
+                    }
+                }
+
+                Ok(CollisionBox {
+                    support_map: Compound::new(shapes),
+                    rotation: Rotation::Zero.to_value(),
+                    tetrimino_type: Some((*self).clone()),
+                })
+            }
+            TetriminoType::J => {
+                let mut shapes = Vec::new();
+                let shape1 = ShapeHandle::new(Cuboid::new(na::Vector2::new(0.5 * SCALE_FACTOR, 0.5 * SCALE_FACTOR)));
+                let shape2 = ShapeHandle::new(Cuboid::new(na::Vector2::new(1.5 * SCALE_FACTOR, 0.5 * SCALE_FACTOR)));
+
+                let delta1 = Isometry2::new(na::Vector2::new(0.0, 0.0), na::zero());
+                shapes.push((delta1, shape1));
+
+                match rotation {
+                    Rotation::Zero => {
+                        let delta2 = Isometry2::new(na::Vector2::new(1.0 * GRID_STEP, -1.0 * GRID_STEP), na::zero());
+                        shapes.push((delta2, shape2));
+                    }
+                    Rotation::FracPi2 => {
+                        let delta2 = Isometry2::new(na::Vector2::new(1.0 * GRID_STEP, 1.0 * GRID_STEP), FRAC_PI_2);
+                        shapes.push((delta2, shape2));
+                    }
+                    Rotation::Pi => {
+                        let delta2 = Isometry2::new(na::Vector2::new(-1.0 * GRID_STEP, 1.0 * GRID_STEP), na::zero());
+                        shapes.push((delta2, shape2));
+                    }
+                    Rotation::Frac3Pi2 => {
+                        let delta2 = Isometry2::new(na::Vector2::new(-1.0 * GRID_STEP, -1.0 * GRID_STEP), FRAC_PI_2);
+                        shapes.push((delta2, shape2));
+                    }
+                }
+                Ok(CollisionBox {
+                    rotation: rotation.to_value(),
+                    support_map: Compound::new(shapes),
+                    tetrimino_type: Some((*self).clone()),
+                })
+            }
+            TetriminoType::L => {
+                let mut shapes = Vec::new();
+                let shape1 = ShapeHandle::new(Cuboid::new(na::Vector2::new(0.5 * SCALE_FACTOR, 0.5 * SCALE_FACTOR)));
+                let shape2 = ShapeHandle::new(Cuboid::new(na::Vector2::new(1.5 * SCALE_FACTOR, 0.5 * SCALE_FACTOR)));
+
+                let delta1 = Isometry2::new(na::Vector2::new(0.0, 0.0), na::zero());
+                shapes.push((delta1, shape1));
+
+                match rotation {
+                    Rotation::Zero => {
+                        let delta2 = Isometry2::new(na::Vector2::new(-1.0 * GRID_STEP, -1.0 * GRID_STEP), na::zero());
+                        shapes.push((delta2, shape2));
+                    }
+                    Rotation::FracPi2 => {
+                        let delta2 = Isometry2::new(na::Vector2::new(1.0 * GRID_STEP, -1.0 * GRID_STEP), FRAC_PI_2);
+                        shapes.push((delta2, shape2));
+                    }
+                    Rotation::Pi => {
+                        let delta2 = Isometry2::new(na::Vector2::new(1.0 * GRID_STEP, 1.0 * GRID_STEP), na::zero());
+                        shapes.push((delta2, shape2));
+                    }
+                    Rotation::Frac3Pi2 => {
+                        let delta2 = Isometry2::new(na::Vector2::new(-1.0 * GRID_STEP, 1.0 * GRID_STEP), FRAC_PI_2);
+                        shapes.push((delta2, shape2));
+                    }
+                }
+                Ok(CollisionBox {
+                    rotation: rotation.to_value(),
+                    support_map: Compound::new(shapes),
+                    tetrimino_type: Some((*self).clone()),
+                })
+            }
+            TetriminoType::Z => {
+                let mut shapes = Vec::new();
+                let shape1 = ShapeHandle::new(Cuboid::new(na::Vector2::new(1.0 * SCALE_FACTOR, 0.5 * SCALE_FACTOR)));
+                let shape2 = ShapeHandle::new(Cuboid::new(na::Vector2::new(1.0 * SCALE_FACTOR, 0.5 * SCALE_FACTOR)));
+
+                match rotation {
+                    Rotation::Zero => {
+                        let delta1 = Isometry2::new(na::Vector2::new(-0.5 * GRID_STEP, 0.0), na::zero());
+                        let delta2 = Isometry2::new(na::Vector2::new(0.5 * GRID_STEP, -1.0 * GRID_STEP), na::zero());
+                        shapes.push((delta1, shape1));
+                        shapes.push((delta2, shape2));
+                    }
+                    Rotation::FracPi2 => {
+                        let delta1 = Isometry2::new(na::Vector2::new(0.0, -0.5 * GRID_STEP), FRAC_PI_2);
+                        let delta2 = Isometry2::new(na::Vector2::new(1.0 * GRID_STEP, 0.5 * GRID_STEP), FRAC_PI_2);
+                        shapes.push((delta1, shape1));
+                        shapes.push((delta2, shape2));
+                    }
+                    Rotation::Pi => {
+                        let delta1 = Isometry2::new(na::Vector2::new(0.5 * GRID_STEP, 0.0), na::zero());
+                        let delta2 = Isometry2::new(na::Vector2::new(-0.5 * GRID_STEP, 1.0 * GRID_STEP), na::zero());
+                        shapes.push((delta1, shape1));
+                        shapes.push((delta2, shape2));
+                    }
+                    Rotation::Frac3Pi2 => {
+                        let delta1 = Isometry2::new(na::Vector2::new(0.0, 0.5 * GRID_STEP), FRAC_PI_2);
+                        let delta2 = Isometry2::new(na::Vector2::new(-1.0 * GRID_STEP, -0.5 * GRID_STEP), FRAC_PI_2);
+                        shapes.push((delta1, shape1));
+                        shapes.push((delta2, shape2));
+                    }
+                }
+                Ok(CollisionBox {
+                    rotation: rotation.to_value(),
+                    support_map: Compound::new(shapes),
+                    tetrimino_type: Some((*self).clone()),
+                })
+            }
+            TetriminoType::S => {
+                let mut shapes = Vec::new();
+                let shape1 = ShapeHandle::new(Cuboid::new(na::Vector2::new(1.0 * SCALE_FACTOR, 0.5 * SCALE_FACTOR)));
+                let shape2 = ShapeHandle::new(Cuboid::new(na::Vector2::new(1.0 * SCALE_FACTOR, 0.5 * SCALE_FACTOR)));
+
+                match rotation {
+                    Rotation::Zero => {
+                        let delta1 = Isometry2::new(na::Vector2::new(0.5 * GRID_STEP, 0.0), na::zero());
+                        let delta2 = Isometry2::new(na::Vector2::new(-0.5 * GRID_STEP, -1.0 * GRID_STEP), na::zero());
+                        shapes.push((delta1, shape1));
+                        shapes.push((delta2, shape2));
+                    }
+                    Rotation::FracPi2 => {
+                        let delta1 = Isometry2::new(na::Vector2::new(0.0, 0.5 * GRID_STEP), FRAC_PI_2);
+                        let delta2 = Isometry2::new(na::Vector2::new(1.0 * GRID_STEP, -0.5 * GRID_STEP), FRAC_PI_2);
+                        shapes.push((delta1, shape1));
+                        shapes.push((delta2, shape2));
+                    }
+                    Rotation::Pi => {
+                        let delta1 = Isometry2::new(na::Vector2::new(-0.5 * GRID_STEP, 0.0), na::zero());
+                        let delta2 = Isometry2::new(na::Vector2::new(0.5 * GRID_STEP, 1.0 * GRID_STEP), na::zero());
+                        shapes.push((delta1, shape1));
+                        shapes.push((delta2, shape2));
+                    }
+                    Rotation::Frac3Pi2 => {
+                        let delta1 = Isometry2::new(na::Vector2::new(0.0, -0.5 * GRID_STEP), FRAC_PI_2);
+                        let delta2 = Isometry2::new(na::Vector2::new(-1.0 * GRID_STEP, 0.5 * GRID_STEP), FRAC_PI_2);
+                        shapes.push((delta1, shape1));
+                        shapes.push((delta2, shape2));
+                    }
+                }
+                Ok(CollisionBox {
+                    rotation: rotation.to_value(),
+                    support_map: Compound::new(shapes),
+                    tetrimino_type: Some((*self).clone()),
+                })
+            }
+            TetriminoType::O => {
+                let mut shapes = Vec::new();
+                let shape = ShapeHandle::new(Cuboid::new(na::Vector2::new(1.0 * SCALE_FACTOR, 1.0 * SCALE_FACTOR)));
+
+                match rotation {
+                    Rotation::Zero => {
+                        let delta = Isometry2::new(na::Vector2::new(0.5 * GRID_STEP, -0.5 * GRID_STEP), na::zero());
+                        shapes.push((delta, shape));
+                    }
+                    Rotation::FracPi2 => {
+                        let delta = Isometry2::new(na::Vector2::new(0.5 * GRID_STEP, 0.5 * GRID_STEP), na::zero());
+                        shapes.push((delta, shape));
+                    }
+                    Rotation::Pi => {
+                        let delta = Isometry2::new(na::Vector2::new(-0.5 * GRID_STEP, 0.5 * GRID_STEP), na::zero());
+                        shapes.push((delta, shape));
+                    }
+                    Rotation::Frac3Pi2 => {
+                        let delta = Isometry2::new(na::Vector2::new(-0.5 * GRID_STEP,-0.5 * GRID_STEP), na::zero());
+                        shapes.push((delta, shape));
+                    }
+                }
+
+                Ok(CollisionBox {
+                    rotation: rotation.to_value(),
+                    support_map: Compound::new(shapes),
+                    tetrimino_type: Some((*self).clone()),
+                })
+            }
+        }
+    }
+
+    pub fn image(&self, ctx: &mut Context, rotation: f32, scale: f32) -> GameResult<Image> {
+        let mut points: Vec<mint::Point2<f32>> = Vec::new();
+        let mut color: Color = WHITE;
+        let mut offset: mint::Point2<f32> = mint::Point2::from([0.0, 0.0]);
+
+        match self {
+            TetriminoType::I => {
+                points.push(mint::Point2::from([2.0, -0.5]));
+                points.push(mint::Point2::from([2.0, 0.5]));
+                points.push(mint::Point2::from([-2.0, 0.5]));
+                points.push(mint::Point2::from([-2.0, -0.5]));
+
+                color = Color::from_rgb(165, 42, 42);
+                offset = mint::Point2::from([-0.5, 0.0]);
+            }
+            TetriminoType::J => {
+                points.push(mint::Point2::from([-0.5, -0.5]));
+                points.push(mint::Point2::from([0.5, -0.5]));
+                points.push(mint::Point2::from([0.5, 0.5]));
+                points.push(mint::Point2::from([2.5, 0.5]));
+                points.push(mint::Point2::from([2.5, 1.5]));
+                points.push(mint::Point2::from([-0.5, 1.5]));
+            }
+            TetriminoType::L => {
+                points.push(mint::Point2::from([-0.5, -0.5]));
+                points.push(mint::Point2::from([0.5, -0.5]));
+                points.push(mint::Point2::from([0.5, 1.5]));
+                points.push(mint::Point2::from([-2.5, 1.5]));
+                points.push(mint::Point2::from([-2.5, 0.5]));
+                points.push(mint::Point2::from([-0.5, 0.5]));
+
+                color = Color::from_rgb(255, 0, 255);
+            }
+            TetriminoType::O => {
+                points.push(mint::Point2::from([-0.5, -0.5]));
+                points.push(mint::Point2::from([0.5, -0.5]));
+                points.push(mint::Point2::from([1.5, -0.5]));
+                points.push(mint::Point2::from([1.5, 1.5]));
+                points.push(mint::Point2::from([0.0, 1.5]));
+                points.push(mint::Point2::from([-0.5, 1.5]));
+
+                color = Color::from_rgb(0, 0, 255);
+            }
+            TetriminoType::S => {
+                points.push(mint::Point2::from([1.5, -0.5]));
+                points.push(mint::Point2::from([-0.5, -0.5]));
+                points.push(mint::Point2::from([-0.5, 0.5]));
+                points.push(mint::Point2::from([-1.5, 0.5]));
+                points.push(mint::Point2::from([-1.5, 1.5]));
+                points.push(mint::Point2::from([0.5, 1.5]));
+                points.push(mint::Point2::from([0.5, 0.5]));
+                points.push(mint::Point2::from([1.5, 0.5]));
+
+                color = Color::from_rgb(0, 255, 0);
+            }
+            TetriminoType::T => {
+                points.push(mint::Point2::from([-0.5, -0.5]));
+                points.push(mint::Point2::from([0.5, -0.5]));
+                points.push(mint::Point2::from([0.5, 0.5]));
+                points.push(mint::Point2::from([1.5, 0.5]));
+                points.push(mint::Point2::from([1.5, 1.5]));
+                points.push(mint::Point2::from([-1.5, 1.5]));
+                points.push(mint::Point2::from([-1.5, 0.5]));
+                points.push(mint::Point2::from([-0.5, 0.5]));
+
+                color = Color::from_rgb(255, 0, 0);
+            }
+            TetriminoType::Z => {
+                points.push(mint::Point2::from([-1.5, -0.5]));
+                points.push(mint::Point2::from([0.5, -0.5]));
+                points.push(mint::Point2::from([0.5, 0.5]));
+                points.push(mint::Point2::from([1.5, 0.5]));
+                points.push(mint::Point2::from([1.5, 1.5]));
+                points.push(mint::Point2::from([-0.5, 1.5]));
+                points.push(mint::Point2::from([-0.5, 0.5]));
+                points.push(mint::Point2::from([-1.5, 0.5]));
+
+                color = Color::from_rgb(0, 255, 255);
+            }
+        }
+
+        Ok(Image::new(ctx, points, color, offset, rotation, scale))
+    }
+
     pub fn to_code(&self) -> u8 {
         match self {
             TetriminoType::I => 1,
@@ -74,6 +433,33 @@ pub struct Board {
 }
 
 impl Board {
+    pub fn collision_box(&self) -> GameResult<CollisionBox> {
+        let delta = Isometry2::new(na::Vector2::new(0.0, 0.0), na::zero());
+
+        let mut shapes = Vec::new();
+        let shape = ShapeHandle::new(Cuboid::new(na::Vector2::new(20.0 * SCALE_FACTOR, 0.5 * SCALE_FACTOR)));
+
+        shapes.push((delta, shape));
+
+        Ok(CollisionBox {
+            support_map: Compound::new(shapes),
+            rotation: Rotation::Zero.to_value(),
+            tetrimino_type: None,
+        })
+    }
+
+    pub fn image(&self, ctx: &mut Context, rotation: f32, scale: f32) -> GameResult<Image> {
+        let mut points: Vec<mint::Point2<f32>> = Vec::new();
+        let offset: mint::Point2<f32> = mint::Point2::from([0.0, 0.0]);
+
+        points.push(mint::Point2::from([20.0, -0.5]));
+        points.push(mint::Point2::from([20.0, 0.5]));
+        points.push(mint::Point2::from([-20.0, 0.5]));
+        points.push(mint::Point2::from([-20.0, -0.5]));
+
+        Ok(Image::new(ctx, points, WHITE, offset, rotation, scale))
+    }
+
     pub fn new() -> Board {
         let data: MatrixMN<u8, U21, U12> = MatrixMN::<u8, U20, U10>::zeros()
             .insert_row(20, 99)
@@ -280,7 +666,8 @@ impl Tetrimino {
 
         if can_rotate {
             self.vectors = new_vectors.into_inner().unwrap();
-        }    }
+        }
+    }
 }
 
 pub struct ScoreBoard {
