@@ -1,120 +1,53 @@
-use crate::resources::Assets;
-use crate::constants::{BOARD_WIDTH, BOARD_HEIGHT};
-use ggez::{Context, GameResult, graphics};
-use ggez::graphics::{Text, Scale};
-use std::convert::TryFrom;
-use crate::world::{Tetrimino, TetriminoType, ScoreBoard, Board};
-use crate::types::{ScreenPoint2, WorldPoint2};
-use crate::SharedState;
+use crate::ecs::components::Image;
+use ggez::graphics::{Drawable, DrawParam, Rect, DrawMode, Mesh, WHITE, BlendMode, draw};
+use ggez::{Context, GameResult};
+use crate::constants::{IMAGE_SCALE_FACTOR, SCREEN_WIDTH, SCREEN_HEIGHT};
+use ncollide2d::na::{Point2, Vector2};
 
-pub fn draw_tetrimino(
-    assets: &mut Assets,
-    ctx: &mut Context,
-    tetrimino: &Tetrimino,
-    board_dimensions: (f32, f32),
-    offset: Option<(f32, f32)>,
-) -> GameResult {
-    let (board_w, board_h) = board_dimensions;
-    let mut pos = world_to_screen_coords(board_w, board_h, &tetrimino.pos);
-    if let Some((x_offset, y_offset)) = offset {
-        pos = ScreenPoint2::from([pos.x + x_offset, pos.y + y_offset]);
-    };
-    let image = assets.block_image(TetriminoType::to_code(&tetrimino.kind)).unwrap();
+impl Drawable for Image {
+    fn draw(&self, ctx: &mut Context, param: DrawParam) -> GameResult<()> {
+        let rect = Rect::new(-0.5, -0.5, 1.0, 1.0);
+        let mesh = Mesh::new_rectangle(ctx, DrawMode::fill(), rect, WHITE)?;
 
-    for vector in tetrimino.vectors.iter() {
-        let mut vector_pos =
-            world_to_screen_coords(
-                board_w,
-                board_h,
-                &WorldPoint2::from([vector.x + tetrimino.pos.x, vector.y + tetrimino.pos.y]));
-        if let Some((x_offset, y_offset)) = offset {
-            vector_pos = ScreenPoint2::from([vector_pos.x + x_offset, vector_pos.y + y_offset]);
-        };
-        let draw_params = graphics::DrawParam::new()
-            .scale([0.5, 0.5])
-            .dest(vector_pos);
-        graphics::draw(ctx, image, draw_params)?
+        &self.vectors.iter()
+            .map(|vector| {
+                let dest = nalgebra::Point2::from(param.dest);
+                dest + vector * IMAGE_SCALE_FACTOR
+            })
+            .map(|point: nalgebra::Point2<f32>| {
+                let flipped_point = Point2::new(point.x, -point.y);
+                flipped_point + Vector2::new(SCREEN_WIDTH/2.0, SCREEN_HEIGHT/2.0)
+            })
+            .map(|dest: nalgebra::Point2<f32>| {
+                dest.into()
+            })
+            .for_each(|dest: mint::Point2<f32>| {
+                draw(
+                    ctx,
+                    &mesh,
+                    DrawParam::default()
+                        .dest(dest)
+                        .scale(mint::Vector2::from([IMAGE_SCALE_FACTOR, IMAGE_SCALE_FACTOR]))
+                        .color(self.kind.get_color()),
+                ).unwrap_or_else(|err| println!("draw error {:?}", err));
+            });
+        Ok(())
     }
 
-    let draw_params = graphics::DrawParam::new()
-        .scale([0.5, 0.5])
-        .dest(pos);
-    graphics::draw(ctx, image, draw_params)
-}
-
-pub fn draw_board(
-    assets: &mut Assets,
-    ctx: &mut Context,
-    board: &Board,
-    board_dimensions: (f32, f32),
-) -> GameResult {
-    let (board_width, board_height) = board_dimensions;
-    for (r, row) in board.data.row_iter().enumerate() {
-        for (c, _element) in row.column_iter().enumerate() {
-            let point =
-                world_to_screen_coords(
-                    board_width,
-                    board_height,
-                    &WorldPoint2::from([
-                        i8::try_from(c).expect("Failed to convert X coordinate"),
-                        i8::try_from(r).expect("Failed to convert Y coordinate"),
-                    ]));
-            let image = assets.block_image(*_element.get((0, 0)).unwrap());
-            if let Some(image) = image {
-                let draw_params = graphics::DrawParam::new()
-                    .scale([0.5, 0.5])
-                    .dest(point);
-                graphics::draw(ctx, image, draw_params)?
-            }
-        }
+    fn dimensions(&self, _ctx: &mut Context) -> Option<Rect> {
+        None
     }
-    GameResult::Ok(())
+
+    fn set_blend_mode(&mut self, _mode: Option<BlendMode>) {}
+
+    fn blend_mode(&self) -> Option<BlendMode> {
+        None
+    }
 }
 
-pub fn draw_score_board(
-    ctx: &mut Context,
-    score_board: &ScoreBoard,
-    shared_state: &SharedState,
-) -> GameResult {
-    let mut lines = Text::new(format!("LINES: {}", score_board.lines));
-    lines.set_font(shared_state.assets.font, Scale::uniform(10.0));
-
-    let mut score = Text::new(format!("SCORE: {}", score_board.score));
-    score.set_font(shared_state.assets.font, Scale::uniform(10.0));
-
-    let mut level = Text::new(format!("LEVEL: {}", score_board.level));
-    level.set_font(shared_state.assets.font, Scale::uniform(10.0));
-
-    let mut next_piece = Text::new("NEXT");
-    next_piece.set_font(shared_state.assets.font, Scale::uniform(10.0));
-
-    graphics::draw(
-        ctx,
-        &lines,
-        (ScreenPoint2::new(BOARD_WIDTH * 2.0 + BOARD_WIDTH / 8.0, 2.0 * BOARD_HEIGHT / 8.0), graphics::WHITE),
-    )?;
-
-    graphics::draw(
-        ctx,
-        &score,
-        (ScreenPoint2::new(BOARD_WIDTH * 2.0 + BOARD_WIDTH / 8.0, 3.0 * BOARD_HEIGHT / 8.0), graphics::WHITE),
-    )?;
-
-    graphics::draw(
-        ctx,
-        &level,
-        (ScreenPoint2::new(BOARD_WIDTH * 2.0 + BOARD_WIDTH / 8.0, 4.0 * BOARD_HEIGHT / 8.0), graphics::WHITE),
-    )?;
-
-    graphics::draw(
-        ctx,
-        &next_piece,
-        (ScreenPoint2::new(BOARD_WIDTH * 2.0 + BOARD_WIDTH / 8.0, 5.5 * BOARD_HEIGHT / 8.0), graphics::WHITE),
-    )
-}
-
-fn world_to_screen_coords(board_width: f32, board_height: f32, point: &WorldPoint2) -> ScreenPoint2 {
-    let x = (point.x as f32) * (board_width / 12.0) + BOARD_WIDTH;
-    let y = (point.y as f32) * (board_height / 21.0) + BOARD_HEIGHT / 4.0;
-    ScreenPoint2::new(x, y)
+pub fn world_to_screen_coordinates(screen_width: f32, screen_height: f32, world_point: mint::Point2<f32>) -> mint::Point2<f32>{
+    mint::Point2 {
+        x: world_point.x + screen_width/2.0,
+        y: -world_point.y + screen_height/2.0
+    }
 }

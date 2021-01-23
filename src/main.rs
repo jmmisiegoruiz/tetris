@@ -1,196 +1,147 @@
-use ggez::event::{KeyMods, KeyCode};
-use ggez::{GameResult, Context, ContextBuilder, conf, event, timer, graphics};
+use ggez::event::{KeyMods, KeyCode, EventHandler};
+use ggez::{GameResult, Context, ContextBuilder, conf, event, graphics, timer};
 use std::env;
 use std::path;
-use crate::resources::Assets;
-use crate::constants::{SCREEN_WIDTH, SCREEN_HEIGHT, DESIRED_FPS, SCALE_FACTOR};
-use ggez::audio::SoundSource;
-use specs::*;
-use ecs::resources::Motion;
-use crate::ecs::systems::{MovementSystem, CollisionSystem};
-use crate::ecs::components::{Position, ControllableTag, Image, CollisionBox, Collision};
+use crate::constants::{SCREEN_WIDTH, SCREEN_HEIGHT, DESIRED_FPS};
 use mint;
-use crate::world::{TetriminoType, Rotation, Board};
-use mint::Point2;
 use ggez_goodies::input::InputState;
 use crate::inputs::{Axes, Buttons, make_input_binding};
-use ggez::graphics::Text;
-use ggez::nalgebra as na;
-use crate::ecs::resources::Timing;
+use ncollide2d::na::{Point2};
+use ggez::graphics::{DrawParam, BLACK, DrawMode, Rect, Mesh, Color, Text, Scale};
+use specs::{World, WorldExt, Join, RunNow, ReadStorage};
+use crate::ecs::components::{Position, Image, CollisionObjectHandle, ControllableTag, Collision, StaticTag, LineTag, GameEntityType, BlockTag};
+use crate::ecs::utils::create_entity;
+use crate::collisions::{CollisionWorldWrapper};
+use crate::ecs::systems::{MovementSystem, CollisionsSystem, ControlSystem};
+use crate::ecs::resources::{Motion, Timing};
+use specs::shred::Fetch;
+use ncollide2d::pipeline::CollisionObjectRef;
+use crate::drawing::world_to_screen_coordinates;
+use std::ops::Deref;
+use num_traits::FromPrimitive;
+
+extern crate pretty_env_logger;
+#[macro_use] extern crate log;
 
 mod ecs;
-mod scenes;
-mod world;
 mod constants;
-mod types;
-mod drawing;
-mod resources;
 mod inputs;
+mod drawing;
+mod collisions;
 
-pub struct SharedState {
-    game_started: bool,
-    assets: Assets,
+fn main() -> GameResult {
+    pretty_env_logger::init();
+
+    let resource_dir = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
+        let mut path = path::PathBuf::from(manifest_dir);
+        path.push("resources");
+        path
+    } else {
+        path::PathBuf::from("./resources")
+    };
+
+    let mut config = conf::Conf::new();
+    config.window_setup.title = String::from("Just another Tetris");
+    config.window_mode.width = SCREEN_WIDTH;
+    config.window_mode.height = SCREEN_HEIGHT;
+
+    let (ref mut ctx, ref mut event_loop) = ContextBuilder::new("tetris", "Jose Matias Misiego Ruiz")
+        .conf(config)
+        .add_resource_path(resource_dir)
+        .build()
+        .unwrap();
+
+    let game = &mut MainState::new()?;
+
+    event::run(ctx, event_loop, game)?;
+
+    Ok(())
 }
 
-impl SharedState {
-    fn new(ctx: &mut Context) -> GameResult<SharedState> {
-        let assets = Assets::new(ctx)?;
-
-        let s = SharedState {
-            game_started: false,
-            assets,
-        };
-
-        Ok(s)
-    }
-}
-
-struct MainState {
-    dt: std::time::Duration,
+pub struct MainState {
+    input_state: InputState<Axes, Buttons>,
     specs_world: World,
     movement_system: MovementSystem,
-    collision_system: CollisionSystem,
-    input_state: InputState<Axes, Buttons>,
+    collisions_system: CollisionsSystem,
+    control_system: ControlSystem,
 }
 
 impl MainState {
-    fn new(ctx: &mut Context) -> GameResult<MainState> {
-        let mut shared_state = SharedState::new(ctx)?;
-        shared_state.assets.theme.set_repeat(true);
-        shared_state.assets.theme.play()?;
+    fn new() -> GameResult<MainState> {
+        let mut specs_world = World::new();
+        specs_world.register::<Position>();
+        specs_world.register::<Image>();
+        specs_world.register::<CollisionObjectHandle>();
+        specs_world.register::<ControllableTag>();
+        specs_world.register::<Collision>();
+        specs_world.register::<StaticTag>();
+        specs_world.register::<LineTag>();
+        specs_world.register::<GameEntityType>();
+        specs_world.register::<BlockTag>();
 
-        let dt = std::time::Duration::new(0, 0);
+        specs_world.insert(Motion::default());
+        specs_world.insert(CollisionWorldWrapper::default());
+        specs_world.insert(Timing::default());
 
-        let mut world = World::new();
-        world.register::<Position>();
-        world.register::<Image>();
-        world.register::<ControllableTag>();
-        world.register::<CollisionBox>();
-        world.register::<Collision>();
+        create_entity(&mut specs_world, Some(Point2::new(0.0, -280.0)), Some(GameEntityType::Board), false);
+        create_entity(&mut specs_world, None, Some(GameEntityType::L), true);
 
-        world
-            .create_entity()
-            .with(Position {
-                position: mint::Point2::from([0.0, -120.0]),
-            })
-            .with(
-                TetriminoType::image(
-                    &TetriminoType::T,
-                    ctx,
-                    0.0, SCALE_FACTOR)?)
-            .with(TetriminoType::collision_box(&TetriminoType::T, Rotation::Zero).unwrap())
-            .build();
-
-        world
-            .create_entity()
-            .with(Position {
-                position: mint::Point2::from([0.0, 0.0]),
-            })
-            .with(
-                TetriminoType::image(
-                    &TetriminoType::O,
-                    ctx,
-                    0.0, SCALE_FACTOR)?)
-            .with(TetriminoType::collision_box(&TetriminoType::O, Rotation::Zero).unwrap())
-            .with(ControllableTag)
-            .build();
-
-        let board = Board::new();
-
-        world
-            .create_entity()
-            .with(Position {
-                position: mint::Point2::from([0.0, -240.0]),
-            })
-            .with(
-                board.image(
-                    ctx,
-                    0.0, SCALE_FACTOR)?)
-            .with(board.collision_box()?)
-            .build();
+        for line in 0..21 {
+            create_entity(&mut specs_world, Some(Point2::new(0.0, -260.0 + f32::from_i32(line).unwrap() * 20.0)), Some(GameEntityType::Line), false);
+        }
 
         make_input_binding();
-        world.insert(Motion::default());
-        world.insert(Timing::default());
 
-        let update_pos = MovementSystem;
-        let detect_collisions = CollisionSystem;
-
-        let ms = MainState {
-            dt,
-            specs_world: world,
-            movement_system: update_pos,
-            collision_system: detect_collisions,
+        Ok(MainState {
             input_state: InputState::new(),
-        };
-
-        Ok(ms)
+            specs_world,
+            movement_system: MovementSystem,
+            collisions_system: CollisionsSystem,
+            control_system: ControlSystem,
+        })
     }
 }
 
-impl ggez::event::EventHandler for MainState {
+impl EventHandler for MainState {
     fn update(&mut self, ctx: &mut Context) -> GameResult<()> {
         while timer::check_update_time(ctx, DESIRED_FPS) {
-            self.dt = timer::delta(ctx);
-
-            //println!("dt = {}ns", self.dt.subsec_nanos());
-            //println!("fps = {}", timer::fps(ctx));
-
-            // run our update systems here
-            self.collision_system.run_now(&self.specs_world);
+            self.collisions_system.run_now(&self.specs_world);
             self.movement_system.run_now(&self.specs_world);
+            self.control_system.run_now(&self.specs_world);
 
             self.specs_world.maintain();
         }
-
         Ok(())
     }
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
-        graphics::clear(ctx, graphics::BLACK);
+        graphics::clear(ctx, BLACK);
 
-        // Get the components we need from the world for drawing
-        let positions = self.specs_world.read_storage::<Position>();
-        let images = self.specs_world.read_storage::<Image>();
-        let collisions = self.specs_world.read_storage::<Collision>();
+        let position = self.specs_world.read_storage::<Position>();
+        let mut image = self.specs_world.write_storage::<Image>();
+        let collision_handle = self.specs_world.read_storage::<CollisionObjectHandle>();
+        let collision_world = self.specs_world.fetch::<CollisionWorldWrapper>();
 
-        // this is our rendering "system"
-        for (p, i) in (&positions, &images).join() {
+        for (position, image, collision_handle) in (&position, &mut image, &collision_handle).join() {
             graphics::draw(
                 ctx,
-                &*i.mesh,
-                (
-                    world_to_screen_coordinates(SCREEN_WIDTH, SCREEN_HEIGHT, p.position),
-                    i.rotation,
-                    i.offset,
-                    i.scale,
-                    i.color
-                ),
+                image,
+                DrawParam::default()
+                    .dest::<mint::Point2<f32>>(position.point.into()),
             ).unwrap_or_else(|err| println!("draw error {:?}", err));
 
-            let position = Text::new(format!("({}, {})", p.position.x, p.position.y));
-
-            graphics::draw(
-                ctx,
-                &position,
-                (
-                    world_to_screen_coordinates(SCREEN_WIDTH, SCREEN_HEIGHT, p.position),
-                    graphics::WHITE),
-            )?;
+            if let Some(handle) = collision_handle.deref() {
+                if let Some(collision_object) = collision_world.collision_object(*handle) {
+                    image.vectors = collision_object.data().vectors.clone();
+                }
+            }
         }
 
-        for collision in (&collisions).join() {
-            let depth = Text::new(format!("depth: {:?}", collision.contact.depth));
-
-            graphics::draw(
-                ctx,
-                &depth,
-                (na::Point2::new(0.0, 500.0), graphics::WHITE),
-            )?;
-        }
+        // self.draw_aabbs(ctx);
+        // self.draw_collision_contacts(ctx);
 
         graphics::present(ctx)?;
-        timer::yield_now();
+
         Ok(())
     }
 
@@ -216,13 +167,15 @@ impl ggez::event::EventHandler for MainState {
                 KeyCode::Right => {
                     self.input_state.update_axis_start(Axes::Horizontal, true);
                 }
-                KeyCode::Space => {
+                KeyCode::Q => {
+                    self.input_state.update_button_down(Buttons::RotateLeft)
+                }
+                KeyCode::W => {
                     self.input_state.update_button_down(Buttons::RotateRight)
                 }
                 _ => (),
             }
-            // Update the world-owned player_input struct to match the current
-            // state of the MainState owned struct
+
             let mut input_state = self.specs_world.write_resource::<Motion>();
             *input_state = Motion::new(&self.input_state);
         }
@@ -242,47 +195,161 @@ impl ggez::event::EventHandler for MainState {
             KeyCode::Right => {
                 self.input_state.update_axis_stop(Axes::Horizontal, true);
             }
-            KeyCode::Space => {
+            KeyCode::Q => {
+                self.input_state.update_button_up(Buttons::RotateLeft)
+            }
+            KeyCode::W => {
                 self.input_state.update_button_up(Buttons::RotateRight)
             }
             _ => (),
         }
 
-        // track the MainState input in the Movement resource in the specs world
         let mut input_state = self.specs_world.write_resource::<Motion>();
         *input_state = Motion::new(&self.input_state);
     }
 }
 
 
-fn main() -> GameResult {
-    let resource_dir = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
-        let mut path = path::PathBuf::from(manifest_dir);
-        path.push("resources");
-        path
-    } else {
-        path::PathBuf::from("./resources")
-    };
+impl MainState {
+    #[allow(dead_code)]
+    fn draw_aabbs(&self, ctx: &mut Context) {
+        let collision_world: Fetch<CollisionWorldWrapper> = self.specs_world.fetch();
 
-    let mut config = conf::Conf::new();
-    config.window_setup.title = String::from("Just another Tetris");
-    config.window_mode.width = SCREEN_WIDTH;
-    config.window_mode.height = SCREEN_HEIGHT;
+        for collision_object in collision_world.collision_objects() {
+            let aabb = collision_object.1.compute_aabb();
+            let mb = &mut graphics::MeshBuilder::new();
 
-    let (ref mut ctx, ref mut event_loop) = ContextBuilder::new("tetris", "Jose Matias Misiego Ruiz")
-        .conf(config)
-        .add_resource_path(resource_dir)
-        .build()
-        .unwrap();
+            mb.rectangle(
+                DrawMode::stroke(1.0),
+                Rect::new(
+                    world_to_screen_coordinates(
+                        SCREEN_WIDTH,
+                        SCREEN_HEIGHT,
+                        mint::Point2::from([aabb.mins.x, aabb.mins.y])).x,
+                    world_to_screen_coordinates(
+                        SCREEN_WIDTH,
+                        SCREEN_HEIGHT,
+                        mint::Point2::from([aabb.maxs.x, aabb.maxs.y])).y,
+                    aabb.maxs.x - aabb.mins.x,
+                    aabb.maxs.y - aabb.mins.y),
+                graphics::WHITE,
+            );
 
-    let game = &mut MainState::new(ctx)?;
+            let mesh: Mesh = mb.build(ctx).unwrap();
 
-    event::run(ctx, event_loop, game)
-}
+            graphics::draw(
+                ctx,
+                &mesh,
+                DrawParam::new(),
+            ).unwrap();
+        }
+    }
+    #[allow(dead_code)]
+    fn draw_collision_contacts(&self, ctx: &mut Context) {
+        let collisions: ReadStorage<Collision> = self.specs_world.read_storage::<Collision>();
 
-fn world_to_screen_coordinates(screen_width: f32, screen_height: f32, world_point: mint::Point2<f32>) -> mint::Point2<f32>{
-    Point2 {
-        x: world_point.x + screen_width/2.0,
-        y: -world_point.y + screen_height/2.0
+        for collision in (&collisions, ).join() {
+            let mb = &mut graphics::MeshBuilder::new();
+
+            mb.circle(
+                DrawMode::fill(),
+                world_to_screen_coordinates(
+                    SCREEN_WIDTH,
+                    SCREEN_HEIGHT,
+                    mint::Point2::from([collision.0.contact.world1.x, collision.0.contact.world1.y])),
+                5.0,
+                1.0,
+                Color::from_rgb(255, 0, 0)
+            );
+
+            mb.circle(
+                DrawMode::fill(),
+                world_to_screen_coordinates(
+                    SCREEN_WIDTH,
+                    SCREEN_HEIGHT,
+                    mint::Point2::from([collision.0.contact.world2.x, collision.0.contact.world2.y])),
+                5.0,
+                1.0,
+                Color::from_rgb(255, 0, 0)
+            );
+
+            let mesh: Mesh = mb.build(ctx).unwrap();
+
+            graphics::draw(
+                ctx,
+                &mesh,
+                DrawParam::new(),
+            ).unwrap();
+        }
+    }
+
+    pub fn draw_score_board(
+        ctx: &mut Context,
+        score_board: &ScoreBoard,
+        shared_state: &SharedState,
+    ) -> GameResult {
+        let mut lines = Text::new(format!("LINES: {}", score_board.lines));
+        lines.set_font(shared_state.assets.font, Scale::uniform(10.0));
+
+        let mut score = Text::new(format!("SCORE: {}", score_board.score));
+        score.set_font(shared_state.assets.font, Scale::uniform(10.0));
+
+        let mut level = Text::new(format!("LEVEL: {}", score_board.level));
+        level.set_font(shared_state.assets.font, Scale::uniform(10.0));
+
+        let mut next_piece = Text::new("NEXT");
+        next_piece.set_font(shared_state.assets.font, Scale::uniform(10.0));
+
+        graphics::draw(
+            ctx,
+            &lines,
+            (
+                world_to_screen_coordinates(
+                    SCREEN_WIDTH,
+                    SCREEN_HEIGHT,
+                    mint::Point2::from([0.0, 0.0]),
+                ),
+                graphics::WHITE
+            ),
+        )?;
+
+        graphics::draw(
+            ctx,
+            &score,
+            (
+                world_to_screen_coordinates(
+                    SCREEN_WIDTH,
+                    SCREEN_HEIGHT,
+                    mint::Point2::from([0.0, 0.0]),
+                ),
+                graphics::WHITE
+            ),
+        )?;
+
+        graphics::draw(
+            ctx,
+            &level,
+            (
+                world_to_screen_coordinates(
+                    SCREEN_WIDTH,
+                    SCREEN_HEIGHT,
+                    mint::Point2::from([0.0, 0.0]),
+                ),
+                graphics::WHITE
+            ),
+        )?;
+
+        graphics::draw(
+            ctx,
+            &next_piece,
+            (
+                world_to_screen_coordinates(
+                    SCREEN_WIDTH,
+                    SCREEN_HEIGHT,
+                    mint::Point2::from([0.0, 0.0]),
+                ),
+                graphics::WHITE
+            ),
+        )
     }
 }

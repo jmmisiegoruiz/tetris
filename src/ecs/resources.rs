@@ -1,13 +1,14 @@
 use ggez_goodies::input::InputState;
 use crate::inputs::{Axes, Buttons};
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug)]
 pub struct Motion {
     pub up: bool,
     pub down: bool,
     pub left: bool,
     pub right: bool,
-    pub rotation_right: bool
+    pub rotation_right: bool,
+    pub rotation_left: bool
 }
 
 impl Motion {
@@ -18,6 +19,7 @@ impl Motion {
             left: input_state.get_axis_raw(Axes::Horizontal) < 0.0,
             right: input_state.get_axis_raw(Axes::Horizontal) > 0.0,
             rotation_right: input_state.get_button_pressed(Buttons::RotateRight),
+            rotation_left: input_state.get_button_pressed(Buttons::RotateLeft),
         }
     }
 
@@ -27,6 +29,11 @@ impl Motion {
         self.left = false;
         self.right = false;
         self.rotation_right = false;
+        self.rotation_left = false;
+    }
+
+    pub fn any(&self) -> bool {
+        self.up || self.down || self.left || self.right || self.rotation_left || self.rotation_right
     }
 }
 
